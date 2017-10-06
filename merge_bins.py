@@ -6,8 +6,12 @@ from sklearn.metrics import silhouette_score
 
 class BinMerger:
     
-    def __init__(self, embedding_by_column):
+    def __init__(self, embedding_by_column, clustering_method='kmeans'):
         self.embedding_by_column = embedding_by_column
+        if clustering_method in ['kmeans', 'agglomerative']:
+            self.clustering_method = clustering_method
+        else:
+            raise ValueError('Available method = [kmeans, agglomerative]')        
     
     def _get_cols_and_embeddings(self, variable):
         cols = []
@@ -22,14 +26,23 @@ class BinMerger:
         
         # Determine Optimal Number of Cluster
         scores = []
+        
         for n_cluster in range(2, len(embeddings)):
-            cluster_label = KMeans(n_cluster).fit_predict(embeddings)
+            
+            if self.clustering_method == 'kmeans':
+                cluster_label = KMeans(n_cluster).fit_predict(embeddings)
+            if self.clustering_method == 'agglomerative':
+                cluster_label = AgglomerativeClustering(n_cluster).fit_predict(embeddings)
+                
             score = silhouette_score(embeddings, cluster_label)
             scores.append(score)
         
         # Clustering with Optimal Number of Cluster
         best_n = np.argmax(scores) + 2
-        cluster_label = KMeans(best_n).fit_predict(embeddings)
+        if self.clustering_method == 'kmeans':
+            cluster_label = KMeans(best_n).fit_predict(embeddings)
+        if self.clustering_method == 'agglomerative':
+            cluster_label = AgglomerativeClustering(best_n).fit_predict(embeddings)
         
         return cluster_label
 

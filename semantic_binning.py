@@ -1,0 +1,54 @@
+from data_handler import DataHandler
+from embed_bins import BinEmbedder
+from merge_bins import BinMerger
+
+
+class SemanticBinning:
+    
+    def __init__(self, var_dict, 
+                 embedding_dim=8, batch_size=1024, max_iter=50000, lr=0.001, verbose=True,
+                 clustering_method='agglomerative', merge_categorical_var=False):
+        
+        self.var_dict = var_dict
+        
+        self.embedding_dim = embedding_dim
+        self.batch_size = batch_size
+        self.max_iter = max_iter
+        self.lr = lr
+        self.verbose = verbose
+        
+        self.clustering_method = clustering_method
+        self.merge_categorical_var = merge_categorical_var
+        
+        self.bin_embedder = BinEmbedder()
+        
+    def fit(self, data):
+        
+        data_handler = DataHandler(data, self.var_dict)
+        dummy_coded_data = data_handler.get_dummy_coded_data()
+        
+        self.bin_embedder.learn_bin_embeddings(dummy_coded_data,
+                                               data_handler.n_variables,
+                                               embedding_dim=self.embedding_dim,
+                                               batch_size=self.batch_size,
+                                               max_iter=self.max_iter,
+                                               lr=self.lr,
+                                               verbose=self.verbose)
+        
+        bin_merger = BinMerger(self.bin_embedder.embedding_by_column, 
+                               clustering_method=self.clustering_method)
+        
+        self.bins_by_var = bin_merger.get_merged_bins_by_var(self.var_dict,
+                                                             merge_categorical_var=self.merge_categorical_var)
+
+    def transform(self, data):
+        data_handler = DataHandler(data, self.var_dict)
+        return data_handler.get_dummy_coded_data(bins_by_variable=self.bins_by_var)
+        
+    def fit_transform(self, data):
+        self.fit(data)
+        self.transform(data)
+        
+    def visualize_bin_embeddings(self, figsize=(20,20)):
+        self.bin_embedder.visualize_embeddings(figsize)
+ 
