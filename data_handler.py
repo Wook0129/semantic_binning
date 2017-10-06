@@ -1,62 +1,41 @@
 import numpy as np
 import pandas as pd
-from uniform_binning import UniformBinning
-from semantic_binning import SemanticBinning
 
 
 class DataHandler:
         
-    def __init__(self, data, *, categorical_variable_names, numerical_variable_names):
+    def __init__(self, data, var_dict, normalize=False):
         
-        def set_type_of_variables(data, categorical_variable_names, numerical_variable_names):
-            categorical_data = data[categorical_variable_names].astype(str)
-            data[categorical_variable_names] = categorical_data
-            numerical_data = data[numerical_variable_names].astype(np.float32)
-            data[numerical_variable_names] = numerical_data
+        self.categorical_vars = data[var_dict['categorical_vars']].astype(str)
+        self.numerical_vars = data[var_dict['numerical_vars']].astype(np.float32)
+        self.class_var = data[var_dict['class_var']]
+        self.n_variables = self.categorical_vars.shape[1] + self.numerical_vars.shape[1]
+        self.input_vars = var_dict['categorical_vars'] + var_dict['numerical_vars']
         
-        if type(data) == pd.DataFrame:
-            self.data = data
+        if normalize:
+            mean, std = self.numerical_vars.mean(), self.numerical_vars.std()
+            self.numerical_vars = (self.numerical_vars - mean) / std
+        
+    def get_dummy_coded_data(self, init_discretize_method='equal_freq', 
+                             n_init_bins=20, bins_by_variable=None):
+        
+        numerical_vars = self.numerical_vars.copy()
+        
+        if not bins_by_variable:
+            if init_discretize_method == 'equal_width':
+                for var in self.numerical_vars.columns:
+                    numerical_vars[var] = pd.cut(numerical_vars[var], bins=n_init_bins)
+
+            if init_discretize_method == 'equal_freq':
+                for var in self.numerical_vars.columns:
+                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins)
         else:
-            raise ValueError('Type of data should be Pandas DataFrame')
+            for var in bins_by_variable:
+                if 'split_point' in bins_by_variable[var]:
+                    bins = bins_by_variable[var]['split_point']
+                    numerical_vars[var] = pd.cut(numerical_vars[var], bins=bins)
             
-        if (type(categorical_variable_names) == list) and (type(numerical_variable_names) == list):
-            self.categorical_variable_names = categorical_variable_names
-            self.numerical_variable_names = numerical_variable_names
-            self.input_variable_names = categorical_variable_names + numerical_variable_names
-        else:
-            raise ValueError('Type of categorical/numerical_variable_names should be list')
-
-        set_type_of_variables(self.data, self.categorical_variable_names,
-                                         self.numerical_variable_names)
-
-    def dummy_coding_data(self):
-        numerical_data = self.data[self.numerical_variable_names]
-        categorical_data = pd.get_dummies(self.data[self.categorical_variable_names])
-        dummy_coded_data = pd.concat([numerical_data, categorical_data], axis=1)
-        return dummy_coded_data
-
-    def uniformly_binning_data(self, bin_numbers=5):
-        if (type(bin_numbers) != int) or bin_numbers < 2:
-            raise ValueError('bin_numbers should be at least 2')
-
-        uniform_binner = UniformBinning(bin_numbers=bin_numbers)
-        uniformly_binned_data = uniform_binner.binning(self.data, self.numerical_variable_names)
-        
-        return uniformly_binned_data
+        numerical_vars = pd.get_dummies(numerical_vars)
+        categorical_vars = pd.get_dummies(self.categorical_vars)
     
-    def semantically_binning_data(self, uniform_bin_numbers=20):
-        
-        semantic_binner = SemanticBinning(uniform_bin_numbers=uniform_bin_numbers)
-        semantically_binned_data = semantic_binner.binning(self.data, self.numerical_variable_names)
-        
-        return semantically_binned_data
-    
-    def normalize(self, data, method='mean_std'):
-        if type(data) != pd.DataFrame:
-            raise ValueError('Type of data should be Pandas DataFrame')
-        if method == 'mean_std':
-            return (data-data.mean())/data.std()
-        elif method == 'min_max':
-            return (data-data.min())/(data.max()-data.min())
-        else:
-            raise NotImplementedError
+        return pd.concat([categorical_vars, numerical_vars], axis=1)
