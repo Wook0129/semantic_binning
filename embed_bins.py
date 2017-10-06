@@ -30,10 +30,10 @@ class BinEmbedder:
         return inputs, targets
 
     def learn_bin_embeddings(self, dummy_coded_data, n_variables, embedding_dim=16,
-                            lr=0.001, max_iter=300000, verbose=True):
+                            lr=0.001, max_iter=300000, batch_size=256, verbose=True):
 
         inputs, targets = self._generate_instances(dummy_coded_data, n_variables)
-        batch_gen = BatchGenerator(inputs, targets, 256)
+        batch_gen = BatchGenerator(inputs, targets, batch_size)
         
         self.bin_embedding = BinEmbedding(dummy_coded_data.shape[1], embedding_dim).cuda()
         loss_ftn = nn.BCELoss()

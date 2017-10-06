@@ -20,15 +20,9 @@ class BinMerger:
 
     def _cluster_embeddings(self, embeddings):
         
-        n_embeddings = len(embeddings)
-        
-        # Do not Merge Bins, if #Bins <= 2
-        if n_embeddings <= 2:
-            return [x for x in range(0, n_embeddings)]
-        
         # Determine Optimal Number of Cluster
         scores = []
-        for n_cluster in range(2, n_embeddings):
+        for n_cluster in range(2, len(embeddings)):
             cluster_label = KMeans(n_cluster).fit_predict(embeddings)
             score = silhouette_score(embeddings, cluster_label)
             scores.append(score)
@@ -65,47 +59,57 @@ class BinMerger:
 
         return cols_by_cluster
 
-    def _merge_bins(self, variable, v_type='numerical'):
+    def _merge_bins(self, variable, v_type):
+        
+        def get_catogory_level_name(variable, col_name):
+            return col_name[len(variable) + 1:]
         
         merged_bins = list()
         split_points = set()
         
         cols, embeddings = self._get_cols_and_embeddings(variable)
+        
+        # Do not Merge, if #Bins <= 2
+        if v_type == 'categorical' and (len(cols) <= 2):
+            merged_bins = [get_catogory_level_name(variable, x) for x in cols]
+            return merged_bins, split_points
+            
         cluster_label = self._cluster_embeddings(embeddings)
         cols_by_cluster = self._get_cols_by_cluster(cols, cluster_label, v_type)
         
         for cols in cols_by_cluster.values():
         
-            if len(cols) > 1:
+            if v_type == 'numerical':
+                intervals = [get_catogory_level_name(variable, x) for x in cols]
+                begin = intervals[0].split(' ')[0]
+                end = intervals[-1].split(' ')[1]
+                merged_bins.append(' '.join([begin, end]))
 
-                if v_type == 'numerical':
-                    intervals = [x.split('_')[-1] for x in cols]
-                    begin = intervals[0].split(' ')[0]
-                    end = intervals[-1].split(' ')[1]
-                    merged_bins.append(' '.join([begin, end]))
+                begin_point = float(begin.replace('(','').replace(',',''))
+                end_point = float(end.replace(']','').replace(',',''))
+                split_points.update([begin_point, end_point])
                     
-                    begin_point = float(begin.replace('(','').replace(',',''))
-                    end_point = float(end.replace(']','').replace(',',''))
-                    split_points.update([begin_point, end_point])
-                    
-                if v_type == 'categorical':
-                    category_levels = [x.split('_')[-1] for x in cols]
-                    merged_bins.append(', '.join(category_levels))
-                    
+            if v_type == 'categorical':
+                category_levels = [get_catogory_level_name(variable, x) for x in cols]
+                merged_bins.append(' <OR> '.join(category_levels))
+                
         split_points = sorted(split_points)
         
         return merged_bins, split_points
     
-    def get_merged_bins_by_var(self, var_dict):
+    def get_merged_bins_by_var(self, var_dict, 
+                               merge_numerical_var=True, merge_categorical_var=True):
         
         bins_by_variable = dict()
         
-        for var in var_dict['numerical_vars']:
-            merged_bins, split_points = self._merge_bins(var, v_type='numerical')
-            bins_by_variable[var] = dict(merged_bins=merged_bins, split_point=split_points)
-
-        for var in var_dict['categorical_vars']:
-            merged_bins, _ = self._merge_bins(var, v_type='categorical')
-            bins_by_variable[var] = dict(merged_bins=merged_bins)
+        if merge_numerical_var:
+            for var in var_dict['numerical_vars']:
+                merged_bins, split_points = self._merge_bins(var, v_type='numerical')
+                bins_by_variable[var] = dict(merged_bins=merged_bins, split_point=split_points)
+        
+        if merge_categorical_var:
+            for var in var_dict['categorical_vars']:
+                merged_bins, _ = self._merge_bins(var, v_type='categorical')
+                bins_by_variable[var] = dict(merged_bins=merged_bins)
             
         return bins_by_variable

@@ -20,6 +20,7 @@ class DataHandler:
                              n_init_bins=20, bins_by_variable=None):
         
         numerical_vars = self.numerical_vars.copy()
+        categorical_vars = pd.get_dummies(self.categorical_vars.copy())
         
         if not bins_by_variable:
             if init_discretize_method == 'equal_width':
@@ -31,11 +32,20 @@ class DataHandler:
                     numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins)
         else:
             for var in bins_by_variable:
-                if 'split_point' in bins_by_variable[var]:
+                
+                is_numerical_var = 'split_point' in bins_by_variable[var]
+                
+                if is_numerical_var:
                     bins = bins_by_variable[var]['split_point']
                     numerical_vars[var] = pd.cut(numerical_vars[var], bins=bins)
-            
+                
+                else:
+                    for merged_bin in bins_by_variable[var]['merged_bins']:
+                        cols = ['{}_{}'.format(var, x) for x in merged_bin.split(' <OR> ')]
+                        if len(cols) >= 2:
+                            categorical_vars[merged_bin] = categorical_vars[cols].sum(axis=1)
+                            categorical_vars.drop(cols, axis=1, inplace=True)
+                    
         numerical_vars = pd.get_dummies(numerical_vars)
-        categorical_vars = pd.get_dummies(self.categorical_vars)
     
         return pd.concat([categorical_vars, numerical_vars], axis=1)
