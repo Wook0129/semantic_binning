@@ -118,11 +118,11 @@ class BinMerger:
         if merge_numerical_var:
             for var in var_dict['numerical_vars']:
                 merged_bins, split_points = self._merge_bins(var, v_type='numerical')
-                bins_by_variable[var] = dict(merged_bins=merged_bins, split_point=split_points)
+                bins_by_variable[var] = dict(bins=merged_bins, split_point=split_points)
         
         if merge_categorical_var:
             for var in var_dict['categorical_vars']:
                 merged_bins, _ = self._merge_bins(var, v_type='categorical')
-                bins_by_variable[var] = dict(merged_bins=merged_bins)
+                bins_by_variable[var] = dict(bins=merged_bins)
             
         return bins_by_variable

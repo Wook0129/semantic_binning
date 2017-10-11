@@ -54,7 +54,8 @@ class BinEmbedder:
             if ((i+1) % 10000 == 0) and verbose:
                 print('>>> Iteration = {}, Loss = {}'.format((i+1), loss.data[0]))
                 
-        print('Learning Embedding Finished!')
+        if verbose:       
+            print('Learning Embedding Finished!')
         
         embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
