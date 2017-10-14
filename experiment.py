@@ -19,16 +19,21 @@ from semantic_binning import SemanticBinning
 class Experiment:
     
     def __init__(self, data_path, var_dict, n_bins_range=range(2, 21),
-                 n_epoch=20, embedding_dim=16, verbose=False,
+                 batch_size=512, n_epoch=20, embedding_dim=16, lr=0.001, weight_decay=1.0, verbose=False,
                  n_init_bins_list=[5, 10, 15, 20], random_state=42):
         
         self.data = pd.read_csv(data_path)
         self.var_dict = var_dict
+        self.n_cols = self.data.shape[1]
+        if 'categorical_vars' in var_dict:
+            self.n_dummy_coded_categorical_cols = pd.get_dummies(self.data[var_dict['categorical_vars']]).shape[1]
+        else:
+            self.n_dummy_coded_categorical_cols = 0
         self.n_bins_range = n_bins_range
         self.n_init_bins_list = n_init_bins_list
         self.random_state = random_state
         
-        self.semantic_binning = SemanticBinning(self.var_dict, n_epoch=n_epoch, embedding_dim=embedding_dim, verbose=verbose)
+        self.semantic_binning = SemanticBinning(self.var_dict, batch_size=batch_size, n_epoch=n_epoch, embedding_dim=embedding_dim, lr=lr, weight_decay=weight_decay, verbose=verbose)
         self.class_var = self.data[var_dict['class_var']]
         self.n_class = len(self.class_var.unique())
     
@@ -120,9 +125,10 @@ class Experiment:
                 
                 # Equal Freq Binning
                 trn_efb = trn_data_handler.get_dummy_coded_data('equal_freq', n_bins)
+                print(trn_efb.shape[1])
                 efb_bins = trn_data_handler.get_bins_by_variable_from_data(trn_efb)
                 val_efb = val_data_handler.get_dummy_coded_data(bins_by_variable=efb_bins)
-                
+                print(val_efb.shape[1])
                 n_cols_efb = val_efb.shape[1]
                 efb_score = self._get_classification_score(trn_efb, val_efb, trn_y, val_y, ['DT', 'LR', 'NB'])
                 if n_bins not in efb_scores:
@@ -134,8 +140,9 @@ class Experiment:
 
                 # Semantic Binning
                 trn_sb = self.semantic_binning.fit_transform(trn_x, n_init_bins)
+                print('trn_sb shape',trn_sb.shape[1])
                 val_sb = self.semantic_binning.transform(val_x)
-                
+                print('val_sb shape',trn_sb.shape[1])
                 n_cols_sb = val_sb.shape[1]
                 sb_score = self._get_classification_score(trn_sb, val_sb, trn_y, val_y, ['DT', 'LR', 'NB'])
                 if n_init_bins not in sb_scores:

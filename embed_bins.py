@@ -18,27 +18,26 @@ class BinEmbedder:
         inputs, targets = list(), list()
         
         for _, row in dummy_coded_data.iterrows():
-            
             non_zero_idxs = [idx for idx, (_, value) in enumerate(row.items()) if value == 1]
-            for input_idx in non_zero_idxs:
-                inputs += [input_idx] * (n_variables - 1)
-                targets += [idx for idx in non_zero_idxs if idx != input_idx]
+            for target_idx in non_zero_idxs:
+                inputs.append([idx for idx in non_zero_idxs if idx != target_idx])
+                targets.append(target_idx)
         return inputs, targets    
 
     def learn_bin_embeddings(self, dummy_coded_data, n_variables, embedding_dim=16,
-                            lr=0.001, n_epoch=20, verbose=True):
+                            lr=0.001, n_epoch=20, weight_decay=1.0, batch_size=512, verbose=True):
         
         inputs, targets = self._generate_instances(dummy_coded_data, n_variables)
         
         n_instances = len(dummy_coded_data)
-        batch_size = min(int(n_instances / 10), 128)
-        n_iter_per_epoch = int(np.ceil(n_instances / batch_size))
+        batch_size = min(int(n_instances / 10), batch_size)
+        n_iter_per_epoch = int(np.ceil(n_instances * (n_variables - 1) / batch_size))
         batch_gen = BatchGenerator(inputs, targets, batch_size)
         
         self.bin_embedding = BinEmbedding(dummy_coded_data.shape[1], embedding_dim).cuda()
         
         loss_ftn = nn.CrossEntropyLoss()
-        opt = torch.optim.Adam(self.bin_embedding.parameters(), lr=lr)
+        opt = torch.optim.Adam(self.bin_embedding.parameters(), lr=lr, weight_decay=weight_decay)
 
         for i in range(n_iter_per_epoch * n_epoch):
             

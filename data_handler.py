@@ -6,17 +6,25 @@ class DataHandler:
         
     def __init__(self, data, var_dict):
         
-        self.categorical_vars = data[var_dict['categorical_vars']].astype(str)
+        self.var_dict = var_dict
+        
+        if 'categorical_vars' in var_dict:
+            self.categorical_vars = data[var_dict['categorical_vars']].astype(str)
+            self.n_variables = len(var_dict['numerical_vars'] + var_dict['categorical_vars'])      
+        else:
+            self.categorical_vars = None
+            self.n_variables = len(var_dict['numerical_vars'])
+            
         self.numerical_vars = data[var_dict['numerical_vars']].astype(np.float32)
         self.class_var = data[var_dict['class_var']]
-        self.n_variables = self.categorical_vars.shape[1] + self.numerical_vars.shape[1]
-        self.input_vars = var_dict['categorical_vars'] + var_dict['numerical_vars']
         
     def get_dummy_coded_data(self, init_discretize_method='equal_freq', 
                              n_init_bins=20, bins_by_variable=None):
         
         numerical_vars = self.numerical_vars.copy()
-        categorical_vars = pd.get_dummies(self.categorical_vars.copy())
+        
+        if 'categorical_vars' in self.var_dict:
+            categorical_vars = pd.get_dummies(self.categorical_vars.copy())
         
         if not bins_by_variable:
             
@@ -25,7 +33,7 @@ class DataHandler:
                     numerical_vars[var] = pd.cut(numerical_vars[var], bins=n_init_bins)
             elif init_discretize_method == 'equal_freq':
                 for var in self.numerical_vars.columns:
-                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins)
+                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
             elif init_discretize_method == 'scale_numeric':
                 mean, std = numerical_vars.mean(), numerical_vars.std()
                 numerical_vars = (numerical_vars - mean) / std
@@ -51,8 +59,11 @@ class DataHandler:
                             categorical_vars.drop(cols, axis=1, inplace=True)
                     
         numerical_vars = pd.get_dummies(numerical_vars)
-    
-        return pd.concat([categorical_vars, numerical_vars], axis=1)
+        
+        if 'categorical_vars' in self.var_dict:
+            return pd.concat([categorical_vars, numerical_vars], axis=1)
+        else:
+            return numerical_vars
     
     def get_bins_by_variable_from_data(self, dummy_coded_data):
 

@@ -6,7 +6,7 @@ from sklearn.metrics import silhouette_score
 
 class BinMerger:
     
-    def __init__(self, embedding_by_column, clustering_method='kmeans'):
+    def __init__(self, embedding_by_column, clustering_method='agglomerative'):
         self.embedding_by_column = embedding_by_column
         if clustering_method in ['kmeans', 'agglomerative']:
             self.clustering_method = clustering_method
@@ -48,11 +48,14 @@ class BinMerger:
 
     def _get_cols_by_cluster(self, cols, cluster_label, v_type):
         
+        def get_begin_point_of_interval(x):
+            return float(x.split('_')[-1].split(', ')[0].replace('(',''))
+        
         cols_by_cluster = dict()
 
         if v_type == 'numerical':
             cnt, prev_label = -1, -1
-            for col, label in sorted(zip(cols, cluster_label), key=lambda x:x[0]):
+            for col, label in sorted(zip(cols, cluster_label), key=lambda x:get_begin_point_of_interval(x[0])):
                 if prev_label == label:
                     cols_by_cluster[cnt].append(col)
                 else:
