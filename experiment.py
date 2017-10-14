@@ -19,7 +19,7 @@ from semantic_binning import SemanticBinning
 class Experiment:
     
     def __init__(self, data_path, var_dict, n_bins_range=range(2, 21),
-                 batch_size=512, embedding_dim=16, max_iter=300000, verbose=False,
+                 n_epoch=20, embedding_dim=16, verbose=False,
                  n_init_bins_list=[5, 10, 15, 20], random_state=42):
         
         self.data = pd.read_csv(data_path)
@@ -28,7 +28,7 @@ class Experiment:
         self.n_init_bins_list = n_init_bins_list
         self.random_state = random_state
         
-        self.semantic_binning = SemanticBinning(self.var_dict, batch_size=batch_size, embedding_dim=embedding_dim, max_iter=max_iter, verbose=verbose)
+        self.semantic_binning = SemanticBinning(self.var_dict, n_epoch=n_epoch, embedding_dim=embedding_dim, verbose=verbose)
         self.class_var = self.data[var_dict['class_var']]
         self.n_class = len(self.class_var.unique())
     
@@ -70,9 +70,9 @@ class Experiment:
 
         return score
         
-    def classification_performance(self, cv=3):
+    def test_classification_performance(self, cv=3):
         
-        raw_scores, sc_scores = list(), list()
+        dummy_coded_scores, sc_scores = list(), list()
         ewb_scores, efb_scores, sb_scores = dict(), dict(), dict()
         
         for trn_idx, val_idx in self._make_cv_folds(cv):
@@ -84,10 +84,12 @@ class Experiment:
             val_data_handler = DataHandler(val_x, self.var_dict)
             
             # Dummy Coding Only
-            trn_raw = trn_data_handler.get_dummy_coded_data('dummy_only')
-            val_raw = val_data_handler.get_dummy_coded_data('dummy_only')
-            raw_score = self._get_classification_score(trn_raw, val_raw, trn_y, val_y, ['DT', 'LR'])
-            raw_scores.append(raw_score)
+            trn_dummy_coded = trn_data_handler.get_dummy_coded_data('dummy_only')
+            val_dummy_coded = val_data_handler.get_dummy_coded_data('dummy_only')
+            
+            n_cols_dummy_coded = val_dummy_coded.shape[1]
+            dummy_coded_score = self._get_classification_score(trn_dummy_coded, val_dummy_coded, trn_y, val_y, ['DT', 'LR'])
+            dummy_coded_scores.append((n_cols_dummy_coded, dummy_coded_score))
             
             # Dummy Coding + Scaling for Numerical Vars
             scaler = StandardScaler()
@@ -98,8 +100,9 @@ class Experiment:
             trn_sc = DataHandler(trn_sc, self.var_dict).get_dummy_coded_data('dummy_only')
             val_sc = DataHandler(val_sc, self.var_dict).get_dummy_coded_data('dummy_only')
             
+            n_cols_sc = val_sc.shape[1]
             sc_score = self._get_classification_score(trn_sc, val_sc, trn_y, val_y, ['DT', 'LR'])            
-            sc_scores.append(sc_score)
+            sc_scores.append((n_cols_sc, sc_score))
 
             for n_bins in self.n_bins_range:
                 
@@ -107,39 +110,45 @@ class Experiment:
                 trn_ewb = trn_data_handler.get_dummy_coded_data('equal_width', n_bins)
                 ewb_bins = trn_data_handler.get_bins_by_variable_from_data(trn_ewb)
                 val_ewb = val_data_handler.get_dummy_coded_data(bins_by_variable=ewb_bins)
+                
+                n_cols_ewb = val_ewb.shape[1]
                 ewb_score = self._get_classification_score(trn_ewb, val_ewb, trn_y, val_y, ['DT', 'LR', 'NB'])
                 if n_bins not in ewb_scores:
-                    ewb_scores[n_bins] = [ewb_score]
+                    ewb_scores[n_bins] = [(n_cols_ewb, ewb_score)]
                 else:
-                    ewb_scores[n_bins].append(ewb_score)
+                    ewb_scores[n_bins].append((n_cols_ewb, ewb_score))
                 
                 # Equal Freq Binning
                 trn_efb = trn_data_handler.get_dummy_coded_data('equal_freq', n_bins)
                 efb_bins = trn_data_handler.get_bins_by_variable_from_data(trn_efb)
                 val_efb = val_data_handler.get_dummy_coded_data(bins_by_variable=efb_bins)
+                
+                n_cols_efb = val_efb.shape[1]
                 efb_score = self._get_classification_score(trn_efb, val_efb, trn_y, val_y, ['DT', 'LR', 'NB'])
                 if n_bins not in efb_scores:
-                    efb_scores[n_bins] = [efb_score]
+                    efb_scores[n_bins] = [(n_cols_efb, efb_score)]
                 else:
-                    efb_scores[n_bins].append(efb_score)
+                    efb_scores[n_bins].append((n_cols_efb, efb_score))
                     
             for n_init_bins in self.n_init_bins_list:
 
                 # Semantic Binning
                 trn_sb = self.semantic_binning.fit_transform(trn_x, n_init_bins)
                 val_sb = self.semantic_binning.transform(val_x)
+                
+                n_cols_sb = val_sb.shape[1]
                 sb_score = self._get_classification_score(trn_sb, val_sb, trn_y, val_y, ['DT', 'LR', 'NB'])
                 if n_init_bins not in sb_scores:
-                    sb_scores[n_init_bins] = [sb_score]
+                    sb_scores[n_init_bins] = [(n_cols_sb, sb_score)]
                 else:
-                    sb_scores[n_init_bins].append(sb_score)
+                    sb_scores[n_init_bins].append((n_cols_sb, sb_score))
                     
-        scores = dict(raw_scores=raw_scores, sc_scores=sc_scores,
-                      ewb_scores=ewb_scores, efb_scores=efb_scores,
-                      sb_scores=sb_scores)
+        scores = dict(dummy_only=dummy_coded_scores, scale_numeric=sc_scores,
+                      equal_width=ewb_scores, equal_freq=efb_scores,
+                      semantic_binning=sb_scores)
         return scores
     
-    def clustering_performance(self, methods=['kmeans', 'agglomerative']):
+    def test_clustering_performance(self, methods=['kmeans', 'agglomerative']):
         
         def get_clustering_score(X, method):
             if method == 'kmeans':
@@ -155,64 +164,95 @@ class Experiment:
         
         scores['dummy_only'] = dict()
         dummy_coded = data_handler.get_dummy_coded_data('dummy_only')
+        n_cols_dummy_coded = dummy_coded.shape[1]
         for method in methods:
             dummy_score = get_clustering_score(dummy_coded, method)
-            scores['dummy_only'][method] = dummy_score
+            scores['dummy_only'][method] = (n_cols_dummy_coded, dummy_score)
         
         scores['scale_numeric'] = dict()
         scale_numeric = data_handler.get_dummy_coded_data('scale_numeric')
+        n_cols_scale_numeric = scale_numeric.shape[1]
         for method in methods:
             scale_score = get_clustering_score(scale_numeric, method)
-            scores['scale_numeric'][method] = scale_score
+            scores['scale_numeric'][method] = (n_cols_scale_numeric, scale_score)
 
         scores['equal_width'] = dict()
         for method in methods:
             scores['equal_width'][method] = dict()
             for n_bins in self.n_bins_range:
                 ewb = data_handler.get_dummy_coded_data('equal_width', n_bins)
+                n_cols_ewb = ewb.shape[1]
                 ewb_score = get_clustering_score(ewb, method)
-                scores['equal_width'][method][n_bins] = ewb_score
+                scores['equal_width'][method][n_bins] = (n_cols_ewb, ewb_score)
 
         scores['equal_freq'] = dict()
         for method in methods:
             scores['equal_freq'][method] = dict()
             for n_bins in self.n_bins_range:   
                 efb = data_handler.get_dummy_coded_data('equal_freq', n_bins)
+                n_cols_efb = efb.shape[1]
                 efb_score = get_clustering_score(efb, method)
-                scores['equal_freq'][method][n_bins] = efb_score
+                scores['equal_freq'][method][n_bins] = (n_cols_efb, efb_score)
         
         scores['semantic_binning'] = dict()
         for method in methods:
             scores['semantic_binning'][method] = dict()
         for n_init_bins in self.n_init_bins_list:
             sb = self.semantic_binning.fit_transform(self.data, n_init_bins)
+            n_cols_sb = sb.shape[1]
             for method in methods:
                 sb_score = get_clustering_score(sb, method)
-                scores['semantic_binning'][method][n_init_bins] = sb_score
+                scores['semantic_binning'][method][n_init_bins] = (n_cols_sb, sb_score)
                 
         return scores
 
-def compute_cv_score(scores, models=['DT', 'LR']):
-    for model in models:
-        print(model)
-        cv_score = np.array([fold[model] for fold in scores])
-        print('Accuracy = {0:0.3f} (+/- {1:0.3f})'.format(cv_score.mean(), cv_score.std() * 2))
-        print('')
+    def print_classification_scores(self, scores, method):
 
-def compute_cv_score_by_n_bins(scores, models=['DT', 'LR', 'NB']):
-    for model in models:
-        print(model)
-        for n_bins in scores:
-            cv_score = np.array([fold[model] for fold in scores[n_bins]])
-            print('#Bins = {0}, Accuracy = {1:0.3f} (+/- {2:0.3f})'.format(n_bins, cv_score.mean(), cv_score.std() * 2))
-        print('')
+        if method in ['dummy_only', 'scale_numeric']:
+            models = ['DT', 'LR']
+            for model in models:
+                print('{} performance'.format(model))
+                n_cols = np.array([fold[0] for fold in scores[method]])
+                cv_score = np.array([fold[1][model] for fold in scores[method]])
+                print('#cols = {0}, Accuracy = {1:0.3f} (+/- {2:0.3f})'.format(n_cols.mean(), cv_score.mean(), cv_score.std() * 2))
+
+        elif method in ['equal_width', 'equal_freq']:
+            models = ['DT', 'LR', 'NB']
+            for model in models:
+                print('{} performance'.format(model))
+                for n_bins in scores[method]:
+                    n_cols = np.array([fold[0] for fold in scores[method][n_bins]])
+                    cv_score = np.array([fold[1][model] for fold in scores[method][n_bins]])
+                    print('#Bins = {0}, #Avg Cols = {1}, Accuracy = {2:0.3f} (+/- {3:0.3f})'.format(n_bins, n_cols.mean(), cv_score.mean(), cv_score.std() * 2))
+
+        elif method == 'semantic_binning':
+            models = ['DT', 'LR', 'NB']
+            for model in models:
+                print('{} performance'.format(model))
+                for n_init_bins in scores[method]:
+                    n_cols = np.array([fold[0] for fold in scores[method][n_init_bins]])
+                    cv_score = np.array([fold[1][model] for fold in scores[method][n_init_bins]])
+                    print('#Init Bins = {0}, #Avg Cols = {1}, Accuracy = {2:0.3f} (+/- {3:0.3f})'.format(n_init_bins, n_cols.mean(), cv_score.mean(), cv_score.std() * 2))
+        else:
+            raise NotImplementedError
+
+    def print_clustering_scores(self, scores, method):
         
-def print_clustering_score(scores):
-    for method, score in scores.items():
-        print('{0}, NMI = {1:0.4f}'.format(method, score))
-    
-def print_clustering_score_by_n_bins(scores):
-    for method, score_by_n_bins in scores.items():
-        print(method)
-        for n_bins, score in score_by_n_bins.items():
-            print('#Bins = {0}, NMI = {1:0.4f}'.format(n_bins, score))
+        if method in ['dummy_only', 'scale_numeric']:
+            for algorithm, score in scores[method].items():
+                print('{0}, #Cols = {1}, NMI = {2:0.4f}'.format(algorithm, score[0], score[1]))
+        
+        elif method in ['equal_width', 'equal_freq']:
+            for algorithm, score_by_n_bins in scores[method].items():
+                print(algorithm)
+                for n_bins, score in score_by_n_bins.items():
+                    print('#Bins = {0}, #Cols = {1}, #NMI = {2:0.4f}'.format(n_bins, score[0], score[1]))
+        
+        elif method == 'semantic_binning':
+            for algorithm, score_by_n_bins in scores[method].items():
+                print(algorithm)
+                for n_init_bins, score in score_by_n_bins.items():
+                    print('#Init Bins = {0}, #Cols = {1}, NMI = {2:0.4f}'.format(n_init_bins, score[0], score[1]))            
+            
+        else:
+            raise NotImplementedError 

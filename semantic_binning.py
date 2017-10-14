@@ -6,14 +6,13 @@ from merge_bins import BinMerger
 class SemanticBinning:
     
     def __init__(self, var_dict, 
-                 embedding_dim=8, batch_size=512, max_iter=300000, lr=0.001, verbose=True,
+                 embedding_dim=8, n_epoch=20, lr=0.001, verbose=True,
                  clustering_method='agglomerative', merge_categorical_var=False):
         
         self.var_dict = var_dict
         
         self.embedding_dim = embedding_dim
-        self.batch_size = batch_size
-        self.max_iter = max_iter
+        self.n_epoch = n_epoch
         self.lr = lr
         self.verbose = verbose
         
@@ -30,8 +29,7 @@ class SemanticBinning:
         self.bin_embedder.learn_bin_embeddings(dummy_coded_data,
                                                data_handler.n_variables,
                                                embedding_dim=self.embedding_dim,
-                                               batch_size=self.batch_size,
-                                               max_iter=self.max_iter,
+                                               n_epoch=self.n_epoch,
                                                lr=self.lr,
                                                verbose=self.verbose)
         
