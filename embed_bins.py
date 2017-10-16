@@ -1,12 +1,9 @@
 import numpy as np
-
 import torch
 from torch import nn
 from torch.autograd import Variable
-
 from matplotlib import pyplot as plt
 from sklearn.manifold import TSNE
-
 from batch_generator import BatchGenerator
 from embedding_model import BinEmbedding
 
@@ -25,17 +22,6 @@ class BinEmbedder:
                 targets.append([1.0 if (idx != input_idx and idx in non_zero_idxs) else 0.0 for idx in range(n_dummy_cols)])
         return inputs, targets    
 
-#    def _generate_instances(self, dummy_coded_data, n_variables):
-        
-#        inputs, targets = list(), list()
-        
-#        for _, row in dummy_coded_data.iterrows():
-#            non_zero_idxs = [idx for idx, (_, value) in enumerate(row.items()) if value == 1]
-#            for target_idx in non_zero_idxs:
-#                inputs.append([idx for idx in non_zero_idxs if idx != target_idx])
-#                targets.append(target_idx)
-#        return inputs, targets    
-    
     def learn_bin_embeddings(self, dummy_coded_data, n_variables, embedding_dim,
                             lr, n_epoch, weight_decay, batch_size, verbose):
         

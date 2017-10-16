@@ -1,49 +1,39 @@
 import numpy as np
-from sklearn.cluster import AgglomerativeClustering
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
+from sklearn.metrics import pairwise_distances
 
 
 class BinMerger:
     
-    def __init__(self, embedding_by_column, clustering_method='agglomerative'):
+    def __init__(self, embedding_by_column):
         self.embedding_by_column = embedding_by_column
-        if clustering_method in ['kmeans', 'agglomerative']:
-            self.clustering_method = clustering_method
-        else:
-            raise ValueError('Available method = [kmeans, agglomerative]')        
-    
-    def _get_cols_and_embeddings(self, variable):
-        cols = []
-        embeddings = []
-        for c, e in self.embedding_by_column.items():
-            if variable in c:
-                cols.append(c)
-                embeddings.append(e)
-        return cols, embeddings
 
-    def _cluster_embeddings(self, embeddings):
-        
+    def _get_cols_and_pairwise_dist_btw_embeddings(self, variable):
+    
+        def get_begin_point_of_bin(col):
+            return float(col.split('_(')[-1].split(',')[0])
+
+        embedding_by_col = [(col, e) for col, e in self.embedding_by_column.items() if variable in col]
+        embedding_by_col = sorted(embedding_by_col, key=lambda x: get_begin_point_of_bin(x[0]))
+
+        cols = [x[0] for x in embedding_by_col]
+        dist_matrix = pairwise_distances(np.array([x[1] for x in embedding_by_col]), metric='cosine')
+
+        return cols, dist_matrix
+
+    def _clustering_embeddings(self, dist_matrix):
+
         # Determine Optimal Number of Cluster
         scores = []
-        
-        for n_cluster in range(2, len(embeddings)):
-            
-            if self.clustering_method == 'kmeans':
-                cluster_label = KMeans(n_cluster).fit_predict(embeddings)
-            if self.clustering_method == 'agglomerative':
-                cluster_label = AgglomerativeClustering(n_cluster).fit_predict(embeddings)
-                
-            score = silhouette_score(embeddings, cluster_label)
-            scores.append(score)
-        
+        for n_cluster in range(2, len(dist_matrix)):
+            cluster_label = KMeans(n_cluster).fit_predict(dist_matrix)
+            scores.append(silhouette_score(dist_matrix, cluster_label))
+
         # Clustering with Optimal Number of Cluster
         best_n = np.argmax(scores) + 2
-        if self.clustering_method == 'kmeans':
-            cluster_label = KMeans(best_n).fit_predict(embeddings)
-        if self.clustering_method == 'agglomerative':
-            cluster_label = AgglomerativeClustering(best_n).fit_predict(embeddings)
-        
+        cluster_label = KMeans(best_n).fit_predict(dist_matrix)
+
         return cluster_label
 
     def _get_cols_by_cluster(self, cols, cluster_label, v_type):
@@ -55,7 +45,8 @@ class BinMerger:
 
         if v_type == 'numerical':
             cnt, prev_label = -1, -1
-            for col, label in sorted(zip(cols, cluster_label), key=lambda x:get_begin_point_of_interval(x[0])):
+            for col, label in sorted(zip(cols, cluster_label), 
+                                     key=lambda x:get_begin_point_of_interval(x[0])):
                 if prev_label == label:
                     cols_by_cluster[cnt].append(col)
                 else:
@@ -82,15 +73,15 @@ class BinMerger:
         
         merged_bins = list()
         split_points = set()
-        
-        cols, embeddings = self._get_cols_and_embeddings(variable)
+
+        cols, dist_matrix = self._get_cols_and_pairwise_dist_btw_embeddings(variable)
         
         # Do not Merge, if #Bins <= 2
         if v_type == 'categorical' and (len(cols) <= 2):
             merged_bins = [get_catogory_level_name(variable, x) for x in cols]
             return merged_bins, split_points
-            
-        cluster_label = self._cluster_embeddings(embeddings)
+        
+        cluster_label = self._clustering_embeddings(dist_matrix)
         cols_by_cluster = self._get_cols_by_cluster(cols, cluster_label, v_type)
         
         for cols in cols_by_cluster.values():

@@ -1,3 +1,4 @@
+import seaborn as sns
 from data_handler import DataHandler
 from embed_bins import BinEmbedder
 from merge_bins import BinMerger
@@ -7,7 +8,7 @@ class SemanticBinning:
     
     def __init__(self, var_dict, 
                  embedding_dim, batch_size, n_epoch, lr, weight_decay, verbose,
-                 clustering_method='agglomerative', merge_categorical_var=False):
+                 merge_categorical_var=False):
         
         self.var_dict = var_dict
         
@@ -18,7 +19,6 @@ class SemanticBinning:
         self.weight_decay = weight_decay
         self.verbose = verbose
         
-        self.clustering_method = clustering_method
         self.merge_categorical_var = merge_categorical_var
         
         self.bin_embedder = BinEmbedder()
@@ -37,11 +37,9 @@ class SemanticBinning:
                                                lr=self.lr,
                                                verbose=self.verbose)
         
-        bin_merger = BinMerger(self.bin_embedder.embedding_by_column, 
-                               clustering_method=self.clustering_method)
+        self._bin_merger = BinMerger(self.bin_embedder.embedding_by_column)
         
-        self.bins_by_var = bin_merger.get_merged_bins_by_var(self.var_dict,
-                                                             merge_categorical_var=self.merge_categorical_var)
+        self.bins_by_var = self._bin_merger.get_merged_bins_by_var(self.var_dict, merge_categorical_var=self.merge_categorical_var)
 
     def transform(self, data):
         data_handler = DataHandler(data, self.var_dict)
@@ -53,4 +51,7 @@ class SemanticBinning:
         
     def visualize_bin_embeddings(self, figsize=(20,20)):
         self.bin_embedder.visualize_embeddings(figsize)
- 
+    
+    def plot_pairwise_distance_between_bins(self, variable):
+        cols, dist_matrix = self._bin_merger._get_cols_and_pairwise_dist_btw_embeddings(variable)
+        sns.heatmap(dist_matrix, cmap='coolwarm', yticklabels=cols)
