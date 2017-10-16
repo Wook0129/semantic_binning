@@ -6,7 +6,7 @@ from merge_bins import BinMerger
 class SemanticBinning:
     
     def __init__(self, var_dict, 
-                 embedding_dim=8, batch_size=512, n_epoch=20, lr=0.001, weight_decay=1.0, verbose=True,
+                 embedding_dim, batch_size, n_epoch, lr, weight_decay, verbose,
                  clustering_method='agglomerative', merge_categorical_var=False):
         
         self.var_dict = var_dict

@@ -33,7 +33,7 @@ class DataHandler:
                     numerical_vars[var] = pd.cut(numerical_vars[var], bins=n_init_bins)
             elif init_discretize_method == 'equal_freq':
                 for var in self.numerical_vars.columns:
-                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
+                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins)
             elif init_discretize_method == 'scale_numeric':
                 mean, std = numerical_vars.mean(), numerical_vars.std()
                 numerical_vars = (numerical_vars - mean) / std
