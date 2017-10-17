@@ -39,31 +39,49 @@ class BinEmbedder:
         inputs, targets = self._generate_instances(dummy_coded_data, n_variables)
         
         n_instances = len(dummy_coded_data)
+        n_dummy_cols = dummy_coded_data.shape[1]
         batch_size = min(int(n_instances / 10), batch_size)
         n_iter_per_epoch = int(np.ceil(n_instances * (n_variables - 1) / batch_size))
         batch_gen = BatchGenerator(inputs, targets, batch_size)
         
-        self.bin_embedding = BinEmbedding(dummy_coded_data.shape[1], embedding_dim).cuda()
+        self.bin_embedding = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
 
         #loss_ftn = nn.CrossEntropyLoss()
         #loss_ftn = nn.BCELoss()
         loss_ftn = nn.BCEWithLogitsLoss()
         opt = torch.optim.Adam(self.bin_embedding.parameters(), lr=lr, weight_decay=weight_decay)
         
-        for i in range(n_iter_per_epoch * n_epoch):
+        for it in range(n_iter_per_epoch * n_epoch):
             
             input_batch, target_batch = batch_gen.next_batch()
             
             opt.zero_grad()
+            
             input_batch = Variable(torch.LongTensor(input_batch)).cuda()
             target_batch = Variable(torch.FloatTensor(target_batch)).cuda()
-            out = self.bin_embedding(input_batch)
-            loss = loss_ftn(out, target_batch)
-            loss.backward()
-            opt.step()
             
-            if ((i+1) % n_iter_per_epoch == 0) and verbose:
-                print('>>> Epoch = {}, Loss = {}'.format(int((i+1) / n_iter_per_epoch), loss.data[0]))
+            out = self.bin_embedding(input_batch)
+            
+            # Compute penalty term
+            embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
+            embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
+            
+            penalty_term = 0
+            num_bins = 0
+            for var in var_dict['numerical_vars']:
+                bin_embeddings = [e for col, e in embedding_by_column.items() if var == col[:len(var)]]
+                num_bins += len(bin_embeddings)
+                dists = []
+                for i in range(len(bin_embeddings) - 1):
+                    penalty_term += np.linalg.norm(bin_embeddings[i] - bin_embeddings[i+1])
+                    
+            loss = loss_ftn(out, target_batch) + (0.5 * penalty_term / num_bins)
+            loss.backward()
+            
+            opt.step()
+
+            if ((it+1) % n_iter_per_epoch == 0) and verbose:
+                print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
                 
                 ###
                 from merge_bins import BinMerger
