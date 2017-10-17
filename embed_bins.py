@@ -66,16 +66,16 @@ class BinEmbedder:
             embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
             embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
             
-            penalty_term = 0
-            num_bins = 0
-            for var in var_dict['numerical_vars']:
-                bin_embeddings = [e for col, e in embedding_by_column.items() if var == col[:len(var)]]
-                num_bins += len(bin_embeddings)
-                dists = []
-                for i in range(len(bin_embeddings) - 1):
-                    penalty_term += np.linalg.norm(bin_embeddings[i] - bin_embeddings[i+1])
+#            penalty_term = 0
+#            num_bins = 0
+#            for var in var_dict['numerical_vars']:
+#                bin_embeddings = [e for col, e in embedding_by_column.items() if var == col[:len(var)]]
+#                num_bins += len(bin_embeddings)
+#                dists = []
+#                for i in range(len(bin_embeddings) - 1):
+#                    penalty_term += np.linalg.norm(bin_embeddings[i] - bin_embeddings[i+1])
                     
-            loss = loss_ftn(out, target_batch) + (0.5 * penalty_term / num_bins)
+            loss = loss_ftn(out, target_batch)# + (0 * penalty_term / num_bins)
             loss.backward()
             
             opt.step()
