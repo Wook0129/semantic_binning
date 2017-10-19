@@ -18,7 +18,7 @@ class BinMerger:
         embedding_by_col = sorted(embedding_by_col, key=lambda x: get_begin_point_of_bin(x[0]))
 
         cols = [x[0] for x in embedding_by_col]
-        dist_matrix = pairwise_distances(np.array([x[1] for x in embedding_by_col]), metric='cosine')
+        dist_matrix = pairwise_distances(np.array([x[1] for x in embedding_by_col]), metric='cosine').astype(np.float64)
 
         return cols, dist_matrix
 

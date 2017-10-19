@@ -33,7 +33,7 @@ class DataHandler:
                     numerical_vars[var] = pd.cut(numerical_vars[var], bins=n_init_bins)
             elif init_discretize_method == 'equal_freq':
                 for var in self.numerical_vars.columns:
-                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins)
+                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
             elif init_discretize_method == 'scale_numeric':
                 mean, std = numerical_vars.mean(), numerical_vars.std()
                 numerical_vars = (numerical_vars - mean) / std
@@ -44,19 +44,8 @@ class DataHandler:
             
         else:
             for var in bins_by_variable:
-                
-                is_numerical_var = 'split_point' in bins_by_variable[var]
-                
-                if is_numerical_var:
-                    bins = bins_by_variable[var]['split_point']
-                    numerical_vars[var] = pd.cut(numerical_vars[var], bins=bins)
-                
-                else:
-                    for merged_bin in bins_by_variable[var]['merged_bins']:
-                        cols = ['{}_{}'.format(var, x) for x in merged_bin.split(' <OR> ')]
-                        if len(cols) >= 2:
-                            categorical_vars[merged_bin] = categorical_vars[cols].sum(axis=1)
-                            categorical_vars.drop(cols, axis=1, inplace=True)
+                bins = bins_by_variable[var]['split_point']
+                numerical_vars[var] = pd.cut(numerical_vars[var], bins=bins)
                     
         numerical_vars = pd.get_dummies(numerical_vars)
         
