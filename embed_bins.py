@@ -33,7 +33,7 @@ class BinEmbedder:
         return inputs, targets
 
     def learn_bin_embeddings(self, dummy_coded_data, var_dict, embedding_dim,
-                            lr, n_epoch, weight_decay, batch_size, verbose):
+                            lr, n_epoch, weight_decay, inter_bin_distance_penalty, batch_size, verbose):
         
         n_variables = len(var_dict['categorical_vars'] + var_dict['numerical_vars'])
         inputs, targets = self._generate_instances(dummy_coded_data, n_variables)
@@ -46,8 +46,6 @@ class BinEmbedder:
         
         self.bin_embedding = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
 
-        #loss_ftn = nn.CrossEntropyLoss()
-        #loss_ftn = nn.BCELoss()
         loss_ftn = nn.BCEWithLogitsLoss()
         opt = torch.optim.Adam(self.bin_embedding.parameters(), lr=lr, weight_decay=weight_decay)
         
@@ -66,16 +64,16 @@ class BinEmbedder:
             embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
             embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
             
-#            penalty_term = 0
-#            num_bins = 0
-#            for var in var_dict['numerical_vars']:
-#                bin_embeddings = [e for col, e in embedding_by_column.items() if var == col[:len(var)]]
-#                num_bins += len(bin_embeddings)
-#                dists = []
-#                for i in range(len(bin_embeddings) - 1):
-#                    penalty_term += np.linalg.norm(bin_embeddings[i] - bin_embeddings[i+1])
+            penalty_term = 0
+            num_bins = 0
+            for var in var_dict['numerical_vars']:
+                bin_embeddings = [e for col, e in embedding_by_column.items() if var == col[:len(var)]]
+                num_bins += len(bin_embeddings)
+                dists = []
+                for i in range(len(bin_embeddings) - 1):
+                    penalty_term += np.linalg.norm(bin_embeddings[i] - bin_embeddings[i+1])
                     
-            loss = loss_ftn(out, target_batch)# + (0 * penalty_term / num_bins)
+            loss = loss_ftn(out, target_batch) + (inter_bin_distance_penalty * penalty_term / num_bins)
             loss.backward()
             
             opt.step()
