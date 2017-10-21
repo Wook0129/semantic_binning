@@ -69,7 +69,7 @@ class BinEmbedder:
                 ibd_loss_input = Variable(torch.LongTensor(col_idxs)).cuda()
                 embs = self.bin_embedding.embedding(ibd_loss_input)
                 for i in range(len(embs) - 1):
-                    ibd_loss += torch.norm(embs[i] - embs[i+1])
+                    ibd_loss += torch.norm(embs[i] - embs[i+1]) / (2 * len(embs))
             
             loss = loss_ftn(out, target_batch) + ibd_loss * inter_bin_distance_penalty
             loss.backward()

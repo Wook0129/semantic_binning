@@ -28,7 +28,10 @@ class BinMerger:
         scores = []
         for n_cluster in range(2, len(dist_matrix)):
             cluster_label = KMeans(n_cluster).fit_predict(dist_matrix)
-            scores.append(silhouette_score(dist_matrix, cluster_label))
+            try:
+                scores.append(silhouette_score(dist_matrix, cluster_label))
+            except:
+                scores.append(0)
 
         # Clustering with Optimal Number of Cluster
         best_n = np.argmax(scores) + 2
