@@ -12,9 +12,9 @@ class BinMerger:
     def _get_cols_and_pairwise_dist_btw_embeddings(self, variable):
     
         def get_begin_point_of_bin(col):
-            return float(col.split('_(')[-1].split(',')[0])
-
-        embedding_by_col = [(col, e) for col, e in self.embedding_by_column.items() if variable in col]
+            return float(col[len(variable):].split('_(')[-1].split(',')[0])
+        
+        embedding_by_col = [(col, e) for col, e in self.embedding_by_column.items() if variable == col[:len(variable)]]
         embedding_by_col = sorted(embedding_by_col, key=lambda x: get_begin_point_of_bin(x[0]))
 
         cols = [x[0] for x in embedding_by_col]
@@ -36,7 +36,6 @@ class BinMerger:
         # Clustering with Optimal Number of Cluster
         best_n = np.argmax(scores) + 2
         cluster_label = KMeans(best_n).fit_predict(dist_matrix)
-
         return cluster_label
 
     def _get_cols_by_cluster(self, cols, cluster_label):
@@ -55,7 +54,7 @@ class BinMerger:
                 cnt += 1
                 cols_by_cluster[cnt] = [col]
             prev_label = label
-
+        
         return cols_by_cluster
 
     def _merge_bins(self, variable):
@@ -67,10 +66,9 @@ class BinMerger:
         split_points = set()
 
         cols, dist_matrix = self._get_cols_and_pairwise_dist_btw_embeddings(variable)
-        
         cluster_label = self._clustering_embeddings(dist_matrix)
         cols_by_cluster = self._get_cols_by_cluster(cols, cluster_label)
-        
+
         for cols in cols_by_cluster.values():
             intervals = [get_catogory_level_name(variable, x) for x in cols]
             begin = intervals[0].split(' ')[0]

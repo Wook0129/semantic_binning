@@ -7,14 +7,13 @@ from merge_bins import BinMerger
 class SemanticBinning:
     
     def __init__(self, var_dict, embedding_dim, batch_size, n_epoch, lr, 
-                 weight_decay, inter_bin_distance_penalty, verbose):
+                 weight_decay, verbose):
         self.var_dict = var_dict
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.n_epoch = n_epoch
         self.lr = lr
         self.weight_decay = weight_decay
-        self.inter_bin_distance_penalty = inter_bin_distance_penalty
         self.verbose = verbose
         self.bin_embedder = BinEmbedder()
         
@@ -28,7 +27,6 @@ class SemanticBinning:
                                                batch_size=self.batch_size,
                                                n_epoch=self.n_epoch,
                                                weight_decay=self.weight_decay,
-                                               inter_bin_distance_penalty = self.inter_bin_distance_penalty,
                                                lr=self.lr,
                                                verbose=self.verbose)
         

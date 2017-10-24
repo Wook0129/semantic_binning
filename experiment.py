@@ -20,7 +20,7 @@ class Experiment:
     
     def __init__(self, data_path, var_dict, n_bins_range=range(2, 21),
                  batch_size=512, n_epoch=20, embedding_dim=16, lr=0.001, 
-                 weight_decay=0.0, inter_bin_distance_penalty=1.0 ,verbose=False,
+                 weight_decay=0.0, verbose=False,
                  n_init_bins_list=[5, 10, 15, 20], random_state=42):
         
         self.data = pd.read_csv(data_path)
@@ -34,9 +34,7 @@ class Experiment:
         self.n_init_bins_list = n_init_bins_list
         self.random_state = random_state
         
-        self.semantic_binning = SemanticBinning(self.var_dict, batch_size=batch_size, n_epoch=n_epoch, 
-                                                embedding_dim=embedding_dim, lr=lr, weight_decay=weight_decay, 
-                                                inter_bin_distance_penalty=inter_bin_distance_penalty, verbose=verbose)
+        self.semantic_binning = SemanticBinning(self.var_dict, batch_size=batch_size, n_epoch=n_epoch, embedding_dim=embedding_dim, lr=lr, weight_decay=weight_decay, verbose=verbose)
         
         self.class_var = self.data[var_dict['class_var']]
         self.n_class = len(self.class_var.unique())
