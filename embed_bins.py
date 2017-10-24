@@ -97,19 +97,30 @@ class BinEmbedder:
             target_batch = Variable(torch.FloatTensor(target_batch)).cuda()
             
             out = self.bin_embedding(input_batch)
-            
             loss = loss_ftn(out, target_batch)
+
+            for var in var_dict['numerical_vars']:
+                col_idxs = [i for i, x in enumerate(dummy_cols) if var == x[:len(var)]]
+                embs = self.bin_embedding.embedding(Variable(torch.LongTensor(col_idxs)).cuda())
+                for i in range(len(embs) - 1):
+                    loss += 1e-7 * torch.norm(embs[i] - embs[i+1]) / (2 * len(embs))
+
             loss.backward()
             opt.step()
 
-            if ((it+1) % n_iter_per_epoch == 0) and verbose:
-                print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
+            if ((it+1) % n_iter_per_epoch == 0):
+                
+                if verbose:
+                    print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))   
+                    
                 num_bins = self._get_current_cluster(dummy_coded_data, var_dict)
                 print(num_bins)
+                
                 if self._check_convergence(num_bins):
                     if verbose:
                         print('Embedding Converged!')
                     break
+                    
         if not self._check_convergence(num_bins):        
             print('Embedding Failed to Converge in given #epochs..')
         
