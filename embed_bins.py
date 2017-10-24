@@ -109,13 +109,13 @@ class BinEmbedder:
             opt.step()
 
             if ((it+1) % n_iter_per_epoch == 0):
+
+                num_bins = self._get_current_cluster(dummy_coded_data, var_dict)
                 
                 if verbose:
-                    print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))   
+                    print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
+                    print(num_bins)
                     
-                num_bins = self._get_current_cluster(dummy_coded_data, var_dict)
-                print(num_bins)
-                
                 if self._check_convergence(num_bins):
                     if verbose:
                         print('Embedding Converged!')
@@ -123,6 +123,8 @@ class BinEmbedder:
                     
         if not self._check_convergence(num_bins):        
             print('Embedding Failed to Converge in given #epochs..')
+            
+        print('Learned #Bin by Variables = {}'.format(num_bins))
         
         embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))

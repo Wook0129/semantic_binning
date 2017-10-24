@@ -138,7 +138,7 @@ class Experiment:
                     efb_scores[n_bins].append((n_cols_efb, efb_score))
                     
             for n_init_bins in self.n_init_bins_list:
-
+                print('#Init Bin = {}'.format(n_init_bins))
                 # Semantic Binning
                 trn_sb = self.semantic_binning.fit_transform(trn_x, n_init_bins)
                 val_sb = self.semantic_binning.transform(val_x)
@@ -205,6 +205,7 @@ class Experiment:
         for method in methods:
             scores['semantic_binning'][method] = dict()
         for n_init_bins in self.n_init_bins_list:
+            print('#Init Bin = {}'.format(n_init_bins))
             sb = self.semantic_binning.fit_transform(self.data, n_init_bins)
             n_cols_sb = sb.shape[1]
             for method in methods:
