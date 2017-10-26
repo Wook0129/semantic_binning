@@ -11,6 +11,7 @@ class BatchGenerator:
 
     def make_random_iter(self):
         splits = np.arange(self.batch_size, len(self.inputs), self.batch_size)
+        np.random.seed(42)
         it = np.split(np.random.permutation(range(len(self.inputs))), splits)[:-1]
         return iter(it)
         
