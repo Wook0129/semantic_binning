@@ -32,7 +32,8 @@ class BinMerger:
         def make_connectivity(num_bins):
             connectivity = np.eye(num_bins)
             for i in range(num_bins - 1):
-                connectivity[i][i+1] = 1
+                if i < num_bins - 1:
+                    connectivity[i][i+1] = 1
                 if i >= 1:
                     connectivity[i][i-1] = 1
             return connectivity
@@ -40,7 +41,7 @@ class BinMerger:
         # Determine Optimal Number of Cluster
         scores = []
         conn = make_connectivity(len(dist_matrix))
-        for n_cluster in range(2, len(dist_matrix)):
+        for n_cluster in range(2, len(dist_matrix) + 1):
             
             agg = Agglo(n_cluster, affinity='precomputed', linkage='complete',
                         connectivity=conn)
