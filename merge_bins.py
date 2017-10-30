@@ -23,8 +23,7 @@ class BinMerger:
         
         # De-noise embeddings
         kernel_pca = KernelPCA(n_components=2, kernel='cosine')
-        dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings),
-                                         metric='cosine').astype(np.float64)
+        dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
         
         return cols, dist_matrix
 
@@ -34,6 +33,8 @@ class BinMerger:
             connectivity = np.eye(num_bins)
             for i in range(num_bins - 1):
                 connectivity[i][i+1] = 1
+                if i >= 1:
+                    connectivity[i][i-1] = 1
             return connectivity
 
         # Determine Optimal Number of Cluster

@@ -37,7 +37,7 @@ class BinEmbedder:
         return inputs, targets
 
     def _get_current_cluster(self, dummy_coded_data, var_dict):
-        embedding_weights = self.bin_embedding.state_dict()['embedding.weight']
+        embedding_weights = self.be.state_dict()['embedding.weight']
         embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights.cpu().numpy()))
         bin_merger = BinMerger(embedding_by_column)
         num_bins = []
@@ -48,7 +48,7 @@ class BinEmbedder:
             scores.append(score)
         return num_bins, scores
     
-    def _check_convergence(self, curr_score, window_size=5):
+    def _check_convergence(self, curr_score, window_size=10):
         
         if len(self._scores_reg) < window_size:
             self._scores_reg.append(curr_score)
@@ -56,7 +56,7 @@ class BinEmbedder:
         else:
             convergence_cnt = 0
             for prev_score in self._scores_reg[-window_size:]:
-                if np.abs(curr_score - prev_score) < 1e-2:
+                if np.abs(curr_score - prev_score) < 1e-3:
                     convergence_cnt += 1
             if convergence_cnt >= 3:
                 return True
@@ -83,11 +83,11 @@ class BinEmbedder:
         torch.cuda.random.manual_seed_all(42)
         torch.manual_seed(42)
         
-        self.bin_embedding = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
+        self.be = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
         
         loss_ftn = nn.BCEWithLogitsLoss()
         
-        opt = torch.optim.Adam(self.bin_embedding.parameters(), lr=lr, weight_decay=weight_decay)
+        opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
         
         for it in range(n_iter_per_epoch * n_epoch):
             
@@ -98,11 +98,16 @@ class BinEmbedder:
             input_batch = Variable(torch.LongTensor(input_batch)).cuda()
             target_batch = Variable(torch.FloatTensor(target_batch)).cuda()
             
-            out = self.bin_embedding(input_batch)
+            out = self.be(input_batch)
             loss = loss_ftn(out, target_batch)
             
             loss.backward()
             opt.step()
+            
+            # Normalize Embedding Vectors
+            embedding_norm = torch.norm(self.be.embedding.weight, p=2, dim=1).data
+            embedding_norm = embedding_norm.view(-1,1).expand_as(self.be.embedding.weight)
+            self.be.embedding.weight.data = self.be.embedding.weight.data.div(embedding_norm)
 
             if ((it+1) % n_iter_per_epoch == 0):
 
@@ -113,10 +118,10 @@ class BinEmbedder:
                     print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
                     print(num_bins, curr_score)
                     
-                if self._check_convergence(curr_score):
-                    if verbose:
-                        print('Embedding Converged!')
-                    break
+#                if self._check_convergence(curr_score):
+#                    if verbose:
+#                        print('Embedding Converged!')
+#                    break
                     
         if not self._check_convergence(curr_score):        
             print('Embedding Failed to Converge..')
@@ -124,7 +129,7 @@ class BinEmbedder:
         num_bins, scores = self._get_current_cluster(dummy_coded_data, var_dict)    
         print('Learned #Bin by Variables = {}'.format(num_bins))
         
-        embedding_weights = self.bin_embedding.state_dict()['embedding.weight'].cpu().numpy()
+        embedding_weights = self.be.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
     
     def visualize_embeddings(self, figsize=(20,20)):
