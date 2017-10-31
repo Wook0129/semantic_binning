@@ -48,17 +48,16 @@ class BinEmbedder:
             scores.append(score)
         return num_bins, scores
     
-    def _check_convergence(self, curr_score, window_size=10):
-        
+    def _check_convergence(self, curr_score, window_size=20):
         if len(self._scores_reg) < window_size:
             self._scores_reg.append(curr_score)
             return False
         else:
             convergence_cnt = 0
             for prev_score in self._scores_reg[-window_size:]:
-                if np.abs(curr_score - prev_score) < 1e-3:
+                if curr_score < prev_score:
                     convergence_cnt += 1
-            if convergence_cnt >= 3:
+            if convergence_cnt >= window_size * 0.7:
                 return True
             else:
                 self._scores_reg = self._scores_reg[1:] + [curr_score]
@@ -66,6 +65,15 @@ class BinEmbedder:
             
     def learn_bin_embeddings(self, dummy_coded_data, var_dict, embedding_dim,
                             lr, n_epoch, weight_decay, batch_size, verbose):
+        
+        def get_col_idxs_by_var(dummy_coded_data, var_dict):
+            input_vars = var_dict['numerical_vars'] + var_dict['categorical_vars']
+            col_idxs_by_var = dict()
+            for var in input_vars:
+                idxs = [idx for idx, col in enumerate(dummy_coded_data.columns) 
+                        if col.split('_')[0] == var]
+                col_idxs_by_var[var] = idxs
+            return col_idxs_by_var
         
         n_variables = len(var_dict['numerical_vars'])
         if 'categorical_vars' in var_dict:
@@ -85,9 +93,12 @@ class BinEmbedder:
         
         self.be = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
         
-        loss_ftn = nn.BCEWithLogitsLoss()
+        col_idxs_by_var = get_col_idxs_by_var(dummy_coded_data, var_dict)
+        loss_ftn = ScaledBCELoss(col_idxs_by_var)
         
-        opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
+        opt = torch.optim.Adagrad(self.be.parameters())
+        #opt = torch.optim.SGD(self.be.parameters(), lr=lr, momentum=0.9)
+        #opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
         
         for it in range(n_iter_per_epoch * n_epoch):
             
@@ -118,16 +129,17 @@ class BinEmbedder:
                     print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
                     print(num_bins, curr_score)
                     
-#                if self._check_convergence(curr_score):
-#                    if verbose:
-#                        print('Embedding Converged!')
-#                    break
+                #if self._check_convergence(curr_score):
+                #    if verbose:
+                #        print('Embedding Converged!')
+                #    break
                     
-        if not self._check_convergence(curr_score):        
-            print('Embedding Failed to Converge..')
+        #if not self._check_convergence(curr_score):        
+        #    print('Embedding Failed to Converge..')
 
         num_bins, scores = self._get_current_cluster(dummy_coded_data, var_dict)    
         print('Learned #Bin by Variables = {}'.format(num_bins))
+        self._scores_reg = list()
         
         embedding_weights = self.be.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
@@ -143,3 +155,22 @@ class BinEmbedder:
         
         for i, xy in enumerate(zip(tsne[:,0], tsne[:,1])):
             plt.annotate(col_names[i], xy)
+
+class ScaledBCELoss(nn.Module):
+    
+    def __init__(self, col_idxs_by_var):
+        super(ScaledBCELoss, self).__init__()
+        self.col_idxs_by_var = col_idxs_by_var
+        self.n_cols = sum([len(col_idxs) for col_idxs in col_idxs_by_var.values()])
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, logits, target):
+        y_hat = self.sigmoid(logits)
+        loss = - (target * torch.log(y_hat) + (1 - target) * torch.log(1 - y_hat))
+        for var, idxs in self.col_idxs_by_var.items():
+            scaling_factor = [(1.0 / len(idxs)) if idx in idxs else 1.0 
+                              for idx in range(self.n_cols)]
+            scaling_factor = torch.cuda.FloatTensor(scaling_factor).expand_as(loss)
+            loss.data = loss.data.mul(scaling_factor)
+        loss = torch.mean(loss)
+        return loss

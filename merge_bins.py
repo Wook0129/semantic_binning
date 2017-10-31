@@ -24,14 +24,13 @@ class BinMerger:
         # De-noise embeddings
         kernel_pca = KernelPCA(n_components=2, kernel='cosine')
         dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
-        
         return cols, dist_matrix
 
     def _clustering_embeddings(self, dist_matrix, return_score=False):
         
         def make_connectivity(num_bins):
             connectivity = np.eye(num_bins)
-            for i in range(num_bins - 1):
+            for i in range(num_bins):
                 if i < num_bins - 1:
                     connectivity[i][i+1] = 1
                 if i >= 1:
@@ -41,24 +40,16 @@ class BinMerger:
         # Determine Optimal Number of Cluster
         scores = []
         conn = make_connectivity(len(dist_matrix))
-        for n_cluster in range(2, len(dist_matrix) + 1):
-            
-            agg = Agglo(n_cluster, affinity='precomputed', linkage='complete',
-                        connectivity=conn)
+        for n_cluster in range(2, len(dist_matrix)):
+            agg = Agglo(n_cluster, affinity='precomputed', linkage='complete', connectivity=conn)
             cluster_label = agg.fit_predict(dist_matrix)
-            
-            try:
-                scores.append(silhouette_score(dist_matrix, cluster_label,
-                                               metric='precomputed'))
-            except:
-                scores.append(0)
+            scores.append(silhouette_score(dist_matrix, cluster_label, metric='precomputed'))
 
         # Clustering with Optimal Number of Cluster
         best_n = np.argmax(scores) + 2
         best_score = np.max(scores)
         
-        agg = Agglo(best_n, affinity='precomputed', linkage='average',
-                    connectivity=conn)
+        agg = Agglo(best_n, affinity='precomputed', linkage='complete', connectivity=conn)
         cluster_label = agg.fit_predict(dist_matrix)
 
         if not return_score:

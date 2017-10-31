@@ -19,7 +19,8 @@ class SemanticBinning:
         
     def fit(self, data, n_init_bins=20):
         data_handler = DataHandler(data, self.var_dict)
-        dummy_coded_data = data_handler.get_dummy_coded_data(n_init_bins=n_init_bins)
+        dummy_coded_data = data_handler.get_dummy_coded_data(n_init_bins=n_init_bins,)
+                                                           # init_discretize_method='equal_width')
         
         self.bin_embedder.learn_bin_embeddings(dummy_coded_data,
                                                var_dict=self.var_dict,
