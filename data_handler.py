@@ -31,14 +31,27 @@ class DataHandler:
             if init_discretize_method == 'equal_width':
                 for var in self.numerical_vars.columns:
                     numerical_vars[var] = pd.cut(numerical_vars[var], bins=n_init_bins)
+                    
             elif init_discretize_method == 'equal_freq':
+                
                 for var in self.numerical_vars.columns:
-                    numerical_vars[var] = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
+                    
+                    quantized = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
+                    
+                    if len(quantized.unique()) != n_init_bins:
+                        jitter = np.random.normal(loc=0, scale=1e-10, 
+                                                  size=len(numerical_vars[var]))
+                        quantized = pd.qcut(numerical_vars[var]+jitter, q=n_init_bins, duplicates='drop')
+                        
+                    numerical_vars[var] = quantized
+                    
             elif init_discretize_method == 'scale_numeric':
                 mean, std = numerical_vars.mean(), numerical_vars.std()
                 numerical_vars = (numerical_vars - mean) / std
+                
             elif init_discretize_method == 'dummy_only':
                 pass
+            
             else:
                 raise NotImplementedError
             

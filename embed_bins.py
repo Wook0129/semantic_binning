@@ -96,7 +96,7 @@ class BinEmbedder:
         col_idxs_by_var = get_col_idxs_by_var(dummy_coded_data, var_dict)
         loss_ftn = ScaledBCELoss(col_idxs_by_var)
         
-        opt = torch.optim.Adagrad(self.be.parameters(), lr=lr)
+        opt = torch.optim.Adagrad(self.be.parameters(), lr=lr, lr_decay=0.1)
         #opt = torch.optim.SGD(self.be.parameters(), lr=lr, momentum=0.9)
         #opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
         

@@ -36,20 +36,37 @@ class Experiment:
                                                 weight_decay=weight_decay, verbose=verbose)
         self.cv = cv
         self.y = LE().fit_transform(self.data[var_dict['class_var']])
-
+        
+        self.lr_params = [0.1, 0.3, 0.5, 1.0, 3.0]
+        self.dt_params = [d for d in range(2,7)]
+        self.rf_params = [5, 10, 20, 30]
+        
     def _get_classification_score(self, X):
-        scores = []
-        for clf in [LR(), NB(binarize=None), DT(), SVC(), RF()]:
+        
+        def get_cv_score(clf, X):
             cv_scores = cross_val_score(clf, X, self.y, cv=self.cv, n_jobs=self.cv)
             mean, std = np.mean(cv_scores), np.std(cv_scores)
-            scores.append((mean, std))
+            return round(mean, 3), round(std, 3)
+        
+        scores = dict()
+
+        for c in self.lr_params:
+            scores['lr_acc_C={}'.format(c)] = get_cv_score(LR(C=c), X)
+        for d in self.dt_params:
+            scores['dt_acc_depth={}'.format(d)] = get_cv_score(DT(max_depth=d), X)
+        for n in self.rf_params:
+            scores['rf_acc_n_est={}'.format(n)] = get_cv_score(RF(n_estimators=n), X)
+        scores['nb_acc'] = get_cv_score(NB(binarize=None), X)
+        
         return scores            
     
     def _get_clustering_score(self, X):
+        
+        scores = dict()
+        
         n_cluster = len(set(self.y))
-        scores = []
-        for clstr in [KMeans(n_cluster)]:
-            scores += [np.array([NMI(self.y, clstr.fit_predict(X)) for i in range(self.cv)]).mean()]
+        scores['kmeans_nmi'] = np.array([NMI(self.y, KMeans(n_cluster).fit_predict(X)) 
+                                         for i in range(self.cv)]).mean()
         return scores
     
     def perform_exp(self):
@@ -60,7 +77,7 @@ class Experiment:
         
         data_handler = DataHandler(self.data, self.var_dict)
         
-        raw_X = data_handler.get_dummy_coded_data('dummy_only')
+        raw_X = data_handler.get_dummy_coded_data('scale_numeric')
         raw_clf_scores = self._get_classification_score(raw_X)
         raw_clstr_scores = self._get_clustering_score(raw_X)
         list_of_scores.append(('raw', raw_clf_scores, raw_clstr_scores, raw_X.shape[1]))
@@ -89,20 +106,41 @@ class Experiment:
 
     def print_scores(self, list_of_scores):
         
-        exp_result = dict(disc_method=[], 
-                          lr_acc=[], nb_acc=[], dt_acc=[],
-                          svc_acc=[], rf_acc=[],
-                          kmeans_nmi=[],
-                          n_disc_cols=[])
+        exp_result = dict()
+        
+        exp_result['disc_method'] = []
+        
+        for C in self.lr_params:
+            exp_result['lr_acc_C={}'.format(C)] = []
+        for depth in self.dt_params:
+            exp_result['dt_acc_depth={}'.format(depth)] = []
+        for n_estimator in self.rf_params:
+            exp_result['rf_acc_n_est={}'.format(n_estimator)] = []        
+            
+        exp_result['nb_acc'] = []
+        exp_result['kmeans_nmi'] = []
+        
+        exp_result['n_disc_cols'] = []
         
         for x in list_of_scores:
+            
             exp_result['disc_method'].append(x[0])
-            exp_result['lr_acc'].append(x[1][0])
-            exp_result['nb_acc'].append(x[1][1])
-            exp_result['dt_acc'].append(x[1][2])
-            exp_result['svc_acc'].append(x[1][3])
-            exp_result['rf_acc'].append(x[1][4])
-            exp_result['kmeans_nmi'].append(x[2][0])
+            
+            for C in self.lr_params:
+                clf = 'lr_acc_C={}'.format(C)
+                exp_result[clf].append(x[1][clf])
+                
+            for d in self.dt_params:
+                clf = 'dt_acc_depth={}'.format(d)
+                exp_result[clf].append(x[1][clf])
+                
+            for n in self.rf_params:
+                clf = 'rf_acc_n_est={}'.format(n)
+                exp_result[clf].append(x[1][clf])
+                
+            exp_result['nb_acc'].append(x[1]['nb_acc'])    
+            exp_result['kmeans_nmi'].append(x[2]['kmeans_nmi'])
+            
             exp_result['n_disc_cols'].append(x[3])
             
         return pd.DataFrame(exp_result)
