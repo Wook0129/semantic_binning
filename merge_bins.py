@@ -22,8 +22,12 @@ class BinMerger:
         embeddings = np.array([x[1] for x in embedding_by_col])
         
         # De-noise embeddings
-        kernel_pca = KernelPCA(n_components=2, kernel='cosine')
-        dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
+        if len(cols) > 2:
+            kernel_pca = KernelPCA(n_components=2, kernel='cosine')
+            dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
+        else:
+            kernel_pca = KernelPCA(n_components=1, kernel='cosine')
+            dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
         return cols, dist_matrix
 
     def _clustering_embeddings(self, dist_matrix, return_score=False):
@@ -46,12 +50,16 @@ class BinMerger:
             scores.append(silhouette_score(dist_matrix, cluster_label, metric='precomputed'))
 
         # Clustering with Optimal Number of Cluster
-        best_n = np.argmax(scores) + 2
-        best_score = np.max(scores)
-        
-        agg = Agglo(best_n, affinity='precomputed', linkage='complete', connectivity=conn)
-        cluster_label = agg.fit_predict(dist_matrix)
+        if len(scores) > 0:
+            best_n = np.argmax(scores) + 2
+            best_score = np.max(scores)
 
+            agg = Agglo(best_n, affinity='precomputed', linkage='complete', connectivity=conn)
+            cluster_label = agg.fit_predict(dist_matrix)
+        else:
+            best_score = 0
+            cluster_label = [0, 1]
+            
         if not return_score:
             return cluster_label
         if return_score:

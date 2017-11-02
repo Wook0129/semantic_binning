@@ -39,9 +39,12 @@ class DataHandler:
                     quantized = pd.qcut(numerical_vars[var], q=n_init_bins, duplicates='drop')
                     
                     if len(quantized.unique()) != n_init_bins:
-                        jitter = np.random.normal(loc=0, scale=1e-10, 
-                                                  size=len(numerical_vars[var]))
-                        quantized = pd.qcut(numerical_vars[var]+jitter, q=n_init_bins, duplicates='drop')
+                        for q in [10, 20, 30, 50, 100, 200, 300, 500, 1000]:
+                            quantized = pd.qcut(numerical_vars[var], q=q, duplicates='drop')
+                            if len(quantized.unique()) >= 2:
+                                break
+                    if len(quantized.unique()) < 2:
+                        raise ValueError('Not enough dummy variables for {}'.format(var))
                         
                     numerical_vars[var] = quantized
                     

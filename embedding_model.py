@@ -13,5 +13,6 @@ class BinEmbedding(nn.Module):
         
     def forward(self, x):
         h = self.embedding(x)
-        out = self.decoder(h)
+        out = torch.sum(self.decoder(h), dim=1)
+        #out = self.decoder(h)
         return out

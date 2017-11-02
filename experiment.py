@@ -78,12 +78,19 @@ class Experiment:
         data_handler = DataHandler(self.data, self.var_dict)
         
         raw_X = data_handler.get_dummy_coded_data('scale_numeric')
+        n_cat_dummy_var = raw_X.shape[1] - len(self.var_dict['numerical_vars'])
+        
         raw_clf_scores = self._get_classification_score(raw_X)
         raw_clstr_scores = self._get_clustering_score(raw_X)
-        list_of_scores.append(('raw', raw_clf_scores, raw_clstr_scores, raw_X.shape[1]))
-        
-        n_cat_dummy_var = raw_X.shape[1] - len(self.var_dict['numerical_vars'])
+        list_of_scores.append(('raw', raw_clf_scores, raw_clstr_scores, raw_X.shape[1] - n_cat_dummy_var))
 
+        print(time.time() - start_time, 'training start')
+        for n_init_bins in self.n_init_bins_list:
+            sb_X = self.semantic_binning.fit_transform(self.data, n_init_bins)
+            sb_clf_scores = self._get_classification_score(sb_X)
+            sb_clstr_scores = self._get_clustering_score(sb_X)
+            list_of_scores.append(('sb_{}'.format(n_init_bins), sb_clf_scores, sb_clstr_scores, sb_X.shape[1]-n_cat_dummy_var))
+            
         for n_bins in self.n_bins_range:
             ew_X = data_handler.get_dummy_coded_data('equal_width', n_bins)
             ew_clf_scores = self._get_classification_score(ew_X)
@@ -94,13 +101,6 @@ class Experiment:
             ef_clf_scores = self._get_classification_score(ef_X)
             ef_clstr_scores = self._get_clustering_score(ef_X)
             list_of_scores.append(('ef_{}'.format(n_bins), ef_clf_scores, ef_clstr_scores, ef_X.shape[1]-n_cat_dummy_var))
-        
-        print(time.time() - start_time, 'training start')
-        for n_init_bins in self.n_init_bins_list:
-            sb_X = self.semantic_binning.fit_transform(self.data, n_init_bins)
-            sb_clf_scores = self._get_classification_score(sb_X)
-            sb_clstr_scores = self._get_clustering_score(sb_X)
-            list_of_scores.append(('sb_{}'.format(n_init_bins), sb_clf_scores, sb_clstr_scores, sb_X.shape[1]-n_cat_dummy_var))
 
         return list_of_scores
 
@@ -128,17 +128,17 @@ class Experiment:
             
             for C in self.lr_params:
                 clf = 'lr_acc_C={}'.format(C)
-                exp_result[clf].append(x[1][clf])
+                exp_result[clf].append(x[1][clf][0])
                 
             for d in self.dt_params:
                 clf = 'dt_acc_depth={}'.format(d)
-                exp_result[clf].append(x[1][clf])
+                exp_result[clf].append(x[1][clf][0])
                 
             for n in self.rf_params:
                 clf = 'rf_acc_n_est={}'.format(n)
-                exp_result[clf].append(x[1][clf])
+                exp_result[clf].append(x[1][clf][0])
                 
-            exp_result['nb_acc'].append(x[1]['nb_acc'])    
+            exp_result['nb_acc'].append(x[1]['nb_acc'][0])    
             exp_result['kmeans_nmi'].append(x[2]['kmeans_nmi'])
             
             exp_result['n_disc_cols'].append(x[3])

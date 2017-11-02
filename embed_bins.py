@@ -13,29 +13,16 @@ class BinEmbedder:
     
     def __init__(self):
         self._scores_reg = list()
-        
+
     def _generate_instances(self, dummy_coded_data, n_variables):
-        
-        def make_target_vector(input_idx, non_zero_idxs, n_dummy_cols):
-            target_vector = []
-            for idx in range(n_dummy_cols):
-                if (idx != input_idx and idx in non_zero_idxs):
-                    target_vector.append(1.0)
-                else:
-                    target_vector.append(0.0)
-            return target_vector
-        
         inputs, targets = list(), list()
-        n_dummy_cols = dummy_coded_data.shape[1]
-        
         for _, row in dummy_coded_data.iterrows():
             non_zero_idxs = [idx for idx, (_, value) in enumerate(row.items()) if value == 1]
-            for input_idx in non_zero_idxs:
-                inputs.append(input_idx)
-                targets.append(make_target_vector(input_idx, non_zero_idxs, n_dummy_cols))
-                
+            for target_idx in non_zero_idxs:
+                inputs.append([idx for idx in non_zero_idxs if idx != target_idx])
+                targets.append(target_idx)
         return inputs, targets
-
+    
     def _get_current_cluster(self, dummy_coded_data, var_dict):
         embedding_weights = self.be.state_dict()['embedding.weight']
         embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights.cpu().numpy()))
@@ -66,15 +53,6 @@ class BinEmbedder:
     def learn_bin_embeddings(self, dummy_coded_data, var_dict, embedding_dim,
                             lr, n_epoch, weight_decay, batch_size, verbose):
         
-        def get_col_idxs_by_var(dummy_coded_data, var_dict):
-            input_vars = var_dict['numerical_vars'] + var_dict['categorical_vars']
-            col_idxs_by_var = dict()
-            for var in input_vars:
-                idxs = [idx for idx, col in enumerate(dummy_coded_data.columns) 
-                        if col.split('_')[0] == var]
-                col_idxs_by_var[var] = idxs
-            return col_idxs_by_var
-        
         n_variables = len(var_dict['numerical_vars'])
         if 'categorical_vars' in var_dict:
             n_variables += len(var_dict['categorical_vars'])
@@ -92,22 +70,21 @@ class BinEmbedder:
         torch.manual_seed(42)
         
         self.be = BinEmbedding(n_dummy_cols, embedding_dim).cuda()
+
+        loss_ftn = nn.CrossEntropyLoss()
         
-        col_idxs_by_var = get_col_idxs_by_var(dummy_coded_data, var_dict)
-        loss_ftn = ScaledBCELoss(col_idxs_by_var)
-        
-        opt = torch.optim.Adagrad(self.be.parameters(), lr=lr, lr_decay=0.1)
+        opt = torch.optim.Adagrad(self.be.parameters(), lr=lr, lr_decay=0.001)
         #opt = torch.optim.SGD(self.be.parameters(), lr=lr, momentum=0.9)
         #opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
         
         for it in range(n_iter_per_epoch * n_epoch):
             
-            input_batch, target_batch = batch_gen.next_batch()
+            input_batch, target_batch = batch_gen.next_batch() 
             
             opt.zero_grad()
             
             input_batch = Variable(torch.LongTensor(input_batch)).cuda()
-            target_batch = Variable(torch.FloatTensor(target_batch)).cuda()
+            target_batch = Variable(torch.LongTensor(target_batch)).cuda()
             
             out = self.be(input_batch)
             loss = loss_ftn(out, target_batch)
@@ -126,7 +103,8 @@ class BinEmbedder:
                 curr_score = np.mean(scores)
                 
                 if verbose:
-                    print('>>> Epoch = {}, Loss = {}'.format(int((it+1) / n_iter_per_epoch), loss.data[0]))
+                    print('>>> Epoch = {}'.format(int((it+1) / n_iter_per_epoch)))
+                    print('Loss = {}'.format(loss.data[0]))
                     print(num_bins, curr_score)
                     
                 #if self._check_convergence(curr_score):
@@ -155,22 +133,3 @@ class BinEmbedder:
         
         for i, xy in enumerate(zip(tsne[:,0], tsne[:,1])):
             plt.annotate(col_names[i], xy)
-
-class ScaledBCELoss(nn.Module):
-    
-    def __init__(self, col_idxs_by_var):
-        super(ScaledBCELoss, self).__init__()
-        self.col_idxs_by_var = col_idxs_by_var
-        self.n_cols = sum([len(col_idxs) for col_idxs in col_idxs_by_var.values()])
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, logits, target):
-        y_hat = self.sigmoid(logits)
-        loss = - (target * torch.log(y_hat) + (1 - target) * torch.log(1 - y_hat))
-        for var, idxs in self.col_idxs_by_var.items():
-            scaling_factor = [(1.0 / len(idxs)) if idx in idxs else 1.0 
-                              for idx in range(self.n_cols)]
-            scaling_factor = torch.cuda.FloatTensor(scaling_factor).expand_as(loss)
-            loss.data = loss.data.mul(scaling_factor)
-        loss = torch.mean(loss)
-        return loss
