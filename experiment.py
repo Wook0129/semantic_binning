@@ -104,7 +104,7 @@ class Experiment:
             list_of_scores.append(('ef_{}'.format(n_bins), ef_clf_scores, ef_clstr_scores, ef_X.shape[1]-n_cat_dummy_var))
         
         self.list_of_scores = list_of_scores
-        print('Experiemnt Finished !. Result Saved in Exp Instance..')
+        print('Experiment Finished !. Result Saved in Exp Instance..')
 
     def get_result(self):
         

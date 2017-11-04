@@ -28,12 +28,10 @@ class BinEmbedder:
         embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights.cpu().numpy()))
         bin_merger = BinMerger(embedding_by_column)
         num_bins = []
-        scores = []
         for var in var_dict['numerical_vars']:
-            merged_bins, score = bin_merger._merge_bins(var, return_score=True)
+            merged_bins, split_points = bin_merger._merge_bins(var)
             num_bins.append(len(merged_bins))
-            scores.append(score)
-        return num_bins, scores
+        return num_bins
     
     def _check_convergence(self, curr_score, window_size=20):
         if len(self._scores_reg) < window_size:
@@ -99,13 +97,12 @@ class BinEmbedder:
 
             if ((it+1) % n_iter_per_epoch == 0):
 
-                num_bins, scores = self._get_current_cluster(dummy_coded_data, var_dict)
-                curr_score = np.mean(scores)
+                num_bins = self._get_current_cluster(dummy_coded_data, var_dict)
                 
                 if verbose:
                     print('>>> Epoch = {}'.format(int((it+1) / n_iter_per_epoch)))
                     print('Loss = {}'.format(loss.data[0]))
-                    print(num_bins, curr_score)
+                    print(num_bins)
                     
                 #if self._check_convergence(curr_score):
                 #    if verbose:
@@ -115,9 +112,8 @@ class BinEmbedder:
         #if not self._check_convergence(curr_score):        
         #    print('Embedding Failed to Converge..')
 
-        num_bins, scores = self._get_current_cluster(dummy_coded_data, var_dict)    
+        num_bins = self._get_current_cluster(dummy_coded_data, var_dict)    
         print('Learned #Bin by Variables = {}'.format(num_bins))
-        self._scores_reg = list()
         
         embedding_weights = self.be.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))

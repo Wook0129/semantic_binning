@@ -30,40 +30,55 @@ class BinMerger:
             dist_matrix = pairwise_distances(kernel_pca.fit_transform(embeddings), metric='cosine').astype(np.float64)
         return cols, dist_matrix
 
-    def _clustering_embeddings(self, dist_matrix, return_score=False):
-        
-        def make_connectivity(num_bins):
-            connectivity = np.eye(num_bins)
-            for i in range(num_bins):
-                if i < num_bins - 1:
-                    connectivity[i][i+1] = 1
-                if i >= 1:
-                    connectivity[i][i-1] = 1
-            return connectivity
+    def _clustering_embeddings(self, dist_matrix):
 
-        # Determine Optimal Number of Cluster
-        scores = []
-        conn = make_connectivity(len(dist_matrix))
-        for n_cluster in range(2, len(dist_matrix)):
-            agg = Agglo(n_cluster, affinity='precomputed', linkage='complete', connectivity=conn)
-            cluster_label = agg.fit_predict(dist_matrix)
-            scores.append(silhouette_score(dist_matrix, cluster_label, metric='precomputed'))
+        def post_process_cluster_label(cluster_label):
+            p_cluster_label = []
+            cnt = 0
+            prev_label = cluster_label[0]
+            for l in cluster_label:
+                if l == prev_label:
+                    p_cluster_label.append(cnt)
+                else:
+                    cnt += 1
+                    p_cluster_label.append(cnt)
+                prev_label = l
+            return p_cluster_label
 
-        # Clustering with Optimal Number of Cluster
-        if len(scores) > 0:
-            best_n = np.argmax(scores) + 2
-            best_score = np.max(scores)
+        def ensemble_clustering(n_cols, results):
+            adj_matrix = np.zeros((n_cols, n_cols))
+            for i in range(n_cols):
+                for result in results:
+                    for j in range(n_cols):
+                        if result[i] == result[j]:
+                            adj_matrix[i][j] += 1
 
-            agg = Agglo(best_n, affinity='precomputed', linkage='complete', connectivity=conn)
-            cluster_label = agg.fit_predict(dist_matrix)
-        else:
-            best_score = 0
-            cluster_label = [0, 1]
-            
-        if not return_score:
+            adj_matrix = adj_matrix > 2 # Cutoff for co-occurence value
+
+            cluster_label = []
+            i, c_label, cluster_start_idx = 0, 0, 0
+            while(len(cluster_label) != len(adj_matrix)):
+                for i in range(cluster_start_idx, len(adj_matrix)):
+                    co_occur = adj_matrix[cluster_start_idx][i]
+                    if co_occur == 0:
+                        cluster_start_idx = i
+                        c_label += 1
+                        break
+                    else:
+                        cluster_label.append(c_label)
             return cluster_label
-        if return_score:
-            return cluster_label, best_score
+
+        if len(dist_matrix) == 2: # Do not merge
+            return [0, 1]
+        else:
+            results = []
+            for n_cluster in range(2, len(dist_matrix)):
+                agg = Agglo(n_cluster, affinity='precomputed', linkage='complete')
+                cluster_label = agg.fit_predict(dist_matrix)
+                cluster_label = post_process_cluster_label(cluster_label)
+                results.append(cluster_label)
+
+            return ensemble_clustering(len(dist_matrix), results)
 
     def _get_cols_by_cluster(self, cols, cluster_label):
         
@@ -84,7 +99,7 @@ class BinMerger:
         
         return cols_by_cluster
 
-    def _merge_bins(self, variable, return_score=False):
+    def _merge_bins(self, variable):
         
         def get_catogory_level_name(variable, col_name):
             return col_name[len(variable) + 1:]
@@ -93,10 +108,7 @@ class BinMerger:
         split_points = set()
 
         cols, dist_matrix = self._get_cols_and_pairwise_dist_btw_embeddings(variable)
-        if return_score:
-            cluster_label, score = self._clustering_embeddings(dist_matrix, return_score=True)
-        else:
-            cluster_label = self._clustering_embeddings(dist_matrix)
+        cluster_label = self._clustering_embeddings(dist_matrix)
         cols_by_cluster = self._get_cols_by_cluster(cols, cluster_label)
 
         for cols in cols_by_cluster.values():
@@ -111,10 +123,7 @@ class BinMerger:
                 
         split_points = sorted(split_points)
         
-        if return_score:
-            return merged_bins, score
-        else:
-            return merged_bins, split_points
+        return merged_bins, split_points
     
     def get_merged_bins_by_var(self, var_dict):
         bins_by_variable = dict()
