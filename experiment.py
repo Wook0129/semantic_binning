@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 import time
+import seaborn as sns
 
+from matplotlib import pyplot as plt
+    
 from sklearn.cluster import KMeans
 from sklearn.cluster import AgglomerativeClustering as Agglo
 from sklearn.metrics import normalized_mutual_info_score as NMI
@@ -71,8 +74,6 @@ class Experiment:
     
     def perform_exp(self):
         
-        start_time = time.time()
-        
         list_of_scores = []
         
         data_handler = DataHandler(self.data, self.var_dict)
@@ -84,7 +85,6 @@ class Experiment:
         raw_clstr_scores = self._get_clustering_score(raw_X)
         list_of_scores.append(('raw', raw_clf_scores, raw_clstr_scores, raw_X.shape[1] - n_cat_dummy_var))
 
-        print(time.time() - start_time, 'training start')
         for n_init_bins in self.n_init_bins_list:
             sb_X = self.semantic_binning.fit_transform(self.data, n_init_bins)
             sb_clf_scores = self._get_classification_score(sb_X)
@@ -101,10 +101,11 @@ class Experiment:
             ef_clf_scores = self._get_classification_score(ef_X)
             ef_clstr_scores = self._get_clustering_score(ef_X)
             list_of_scores.append(('ef_{}'.format(n_bins), ef_clf_scores, ef_clstr_scores, ef_X.shape[1]-n_cat_dummy_var))
+        
+        self.list_of_scores = list_of_scores
+        print('Experiemnt Finished !. Result Saved in Exp Instance..')
 
-        return list_of_scores
-
-    def print_scores(self, list_of_scores):
+    def get_result(self):
         
         exp_result = dict()
         
@@ -122,7 +123,7 @@ class Experiment:
         
         exp_result['n_disc_cols'] = []
         
-        for x in list_of_scores:
+        for x in self.list_of_scores:
             
             exp_result['disc_method'].append(x[0])
             
@@ -144,3 +145,89 @@ class Experiment:
             exp_result['n_disc_cols'].append(x[3])
             
         return pd.DataFrame(exp_result)
+
+    def plot_model_comparison_chart(self, result):
+
+        def plot_chart_for_model(loc_x, loc_y, title, acc, ylabel):
+
+            ax[loc_x][loc_y].set_title(title, fontsize=25)
+
+            raw_ncols, raw_acc = [], []
+            ew_ncols, ew_acc = [], []
+            ef_ncols, ef_acc = [], []
+            sb_ncols, sb_acc = [], []
+            for c, a, d in zip(rel_n_cols, acc, disc_method):
+                if 'raw' in d:
+                    raw_ncols.append(c)
+                    raw_acc.append(a)
+                if 'ew' in d:
+                    ew_ncols.append(c)
+                    ew_acc.append(a)
+                if 'ef' in d:
+                    ef_ncols.append(c)
+                    ef_acc.append(a)
+                if 'sb' in d:
+                    sb_ncols.append(c)
+                    sb_acc.append(a)
+
+            raw = ax[loc_x][loc_y].scatter(x=raw_ncols, y=raw_acc, s=200, c='y')
+            ew = ax[loc_x][loc_y].scatter(x=ew_ncols, y=ew_acc, s=200, c='g')
+            ef = ax[loc_x][loc_y].scatter(x=ef_ncols, y=ef_acc, s=200, c='b')
+            sb = ax[loc_x][loc_y].scatter(x=sb_ncols, y=sb_acc, s=200, c='r')
+
+            ax[loc_x][loc_y].legend((raw, ew, ef, sb),
+                                    ('Raw', 'Equal Width', 'Equal Freq', 'Semantic Binning'),
+                                    scatterpoints=1, loc='lower right', ncol=2, fontsize=12)        
+            for i, xy in enumerate(zip(rel_n_cols, acc)):
+                ax[loc_x][loc_y].annotate(disc_method[i], xy, fontsize=15)
+
+            ax[loc_x][loc_y].set_xlabel('Relative Number of Columns', fontsize=20)
+            ax[loc_x][loc_y].set_ylabel(ylabel, fontsize=20)
+
+        disc_method = result['disc_method']
+
+        n_cols = result['n_disc_cols']
+        max_n_cols = n_cols.max()
+        rel_n_cols = [(x / max_n_cols) for x in n_cols]
+
+        fig, ax = plt.subplots(figsize=(30, 20), ncols=3, nrows=2)
+        plt.suptitle('Classification, Clustering Performances', fontsize=30)
+
+        plot_chart_for_model(0, 0, 'Decision Tree(depth=3)', result['dt_acc_depth=3'], 'Accuracy')
+        plot_chart_for_model(0, 1, 'Logistic Regression(C=1.0)', result['lr_acc_C=1.0'], 'Accuracy')
+        plot_chart_for_model(0, 2, 'Naive Bayes', result['nb_acc'], 'Accuracy')
+        plot_chart_for_model(1, 0, 'Random Forest(#tree=20)', result['rf_acc_n_est=20'], 'Accuracy')
+    #     plot_chart_for_model(1, 1, 'Support Vector Machine', result['svm_acc'], 'Accuracy')
+        plot_chart_for_model(1, 2, 'K-means NMI', result['kmeans_nmi'], 'NMI')
+
+    def plot_pairwise_distance_matrices(self):
+
+        fig_ncols = 3
+        fig_nrows = int(np.ceil(len(exp.var_dict['numerical_vars']) / fig_ncols))
+
+        fig, ax = plt.subplots(figsize=(fig_ncols * 10, fig_nrows * 10), ncols=fig_ncols, nrows=fig_nrows)
+        plt.suptitle('Pairwise-distance between embeddings', fontsize=30)
+
+        for i, var in enumerate(self.var_dict['numerical_vars']):
+
+            row = i // fig_ncols
+            col = i - fig_ncols * row
+
+            ax[row][col].set_title(var, fontsize=25)
+            cols, dist_matrix = self.semantic_binning._bin_merger._get_cols_and_pairwise_dist_btw_embeddings(var)
+
+            cols = ['(' + x.split('_(')[1] for x in cols]
+            split_points = self.semantic_binning.bins_by_var[var]['split_point']
+            begin_end_points = [[float(x) for x in col.replace('(','').replace(']','').split(', ')] for col in cols]
+            cluster_label = []
+            c_label = 1
+            for j, (begin, end) in enumerate(begin_end_points):
+                if end <= split_points[c_label]:
+                    cluster_label.append(c_label)
+                else:
+                    c_label += 1
+                    cluster_label.append(c_label)
+                    ax[row][col].axhline(j, c="r", linewidth=5)
+                    ax[row][col].axvline(j, c="r", linewidth=5)
+
+            sns.heatmap(dist_matrix, cmap='gray', xticklabels=cluster_label, yticklabels=cols, ax=ax[row][col])
