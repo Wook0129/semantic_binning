@@ -60,6 +60,7 @@ class Experiment:
         for n in self.rf_params:
             scores['rf_acc_n_est={}'.format(n)] = get_cv_score(RF(n_estimators=n), X)
         scores['nb_acc'] = get_cv_score(NB(binarize=None), X)
+        scores['svm_acc'] = get_cv_score(SVC(), X)
         
         return scores            
     
@@ -119,6 +120,7 @@ class Experiment:
             exp_result['rf_acc_n_est={}'.format(n_estimator)] = []        
             
         exp_result['nb_acc'] = []
+        exp_result['svm_acc'] = []
         exp_result['kmeans_nmi'] = []
         
         exp_result['n_disc_cols'] = []
@@ -139,7 +141,8 @@ class Experiment:
                 clf = 'rf_acc_n_est={}'.format(n)
                 exp_result[clf].append(x[1][clf][0])
                 
-            exp_result['nb_acc'].append(x[1]['nb_acc'][0])    
+            exp_result['nb_acc'].append(x[1]['nb_acc'][0])
+            exp_result['svm_acc'].append(x[1]['svm_acc'][0])
             exp_result['kmeans_nmi'].append(x[2]['kmeans_nmi'])
             
             exp_result['n_disc_cols'].append(x[3])
@@ -169,14 +172,20 @@ class Experiment:
                 if 'sb' in d:
                     sb_ncols.append(c)
                     sb_acc.append(a)
-
-            raw = ax[loc_x][loc_y].scatter(x=raw_ncols, y=raw_acc, s=200, c='y')
-            ew = ax[loc_x][loc_y].scatter(x=ew_ncols, y=ew_acc, s=200, c='g')
-            ef = ax[loc_x][loc_y].scatter(x=ef_ncols, y=ef_acc, s=200, c='b')
-            sb = ax[loc_x][loc_y].scatter(x=sb_ncols, y=sb_acc, s=200, c='r')
-
-            ax[loc_x][loc_y].legend((raw, ew, ef, sb),
-                                    ('Raw', 'Equal Width', 'Equal Freq', 'Semantic Binning'),
+                
+            ew = ax[loc_x][loc_y].scatter(x=ew_ncols, y=ew_acc, s=200, c='g', marker='x')
+            ef = ax[loc_x][loc_y].scatter(x=ef_ncols, y=ef_acc, s=200, c='b', marker='x')
+            sb = ax[loc_x][loc_y].scatter(x=sb_ncols, y=sb_acc, s=200, c='r', marker='x')
+            
+            if title != 'Naive Bayes':
+                raw = ax[loc_x][loc_y].scatter(x=raw_ncols, y=raw_acc, s=200, c='y', marker='x')
+                points = (raw, ew, ef, sb)
+                legend_names = ('Raw', 'Equal Width', 'Equal Freq', 'Semantic Binning')
+            
+            else:
+                points = (ew, ef, sb)
+                legend_names = ('Equal Width', 'Equal Freq', 'Semantic Binning')                
+            ax[loc_x][loc_y].legend(points, legend_names, 
                                     scatterpoints=1, loc='lower right', ncol=2, fontsize=12)        
             for i, xy in enumerate(zip(rel_n_cols, acc)):
                 ax[loc_x][loc_y].annotate(disc_method[i], xy, fontsize=15)
@@ -197,13 +206,13 @@ class Experiment:
         plot_chart_for_model(0, 1, 'Logistic Regression(C=1.0)', result['lr_acc_C=1.0'], 'Accuracy')
         plot_chart_for_model(0, 2, 'Naive Bayes', result['nb_acc'], 'Accuracy')
         plot_chart_for_model(1, 0, 'Random Forest(#tree=20)', result['rf_acc_n_est=20'], 'Accuracy')
-    #     plot_chart_for_model(1, 1, 'Support Vector Machine', result['svm_acc'], 'Accuracy')
+        plot_chart_for_model(1, 1, 'Support Vector Machine(RBF kernel)', result['svm_acc'], 'Accuracy')
         plot_chart_for_model(1, 2, 'K-means NMI', result['kmeans_nmi'], 'NMI')
 
     def plot_pairwise_distance_matrices(self):
 
         fig_ncols = 3
-        fig_nrows = int(np.ceil(len(exp.var_dict['numerical_vars']) / fig_ncols))
+        fig_nrows = int(np.ceil(len(self.var_dict['numerical_vars']) / fig_ncols))
 
         fig, ax = plt.subplots(figsize=(fig_ncols * 10, fig_nrows * 10), ncols=fig_ncols, nrows=fig_nrows)
         plt.suptitle('Pairwise-distance between embeddings', fontsize=30)
@@ -230,4 +239,5 @@ class Experiment:
                     ax[row][col].axhline(j, c="r", linewidth=5)
                     ax[row][col].axvline(j, c="r", linewidth=5)
 
-            sns.heatmap(dist_matrix, cmap='gray', xticklabels=cluster_label, yticklabels=cols, ax=ax[row][col])
+            sns.heatmap(dist_matrix, cmap='gray', xticklabels=cluster_label,
+                        yticklabels=cols, ax=ax[row][col])
