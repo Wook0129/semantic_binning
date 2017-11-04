@@ -53,8 +53,7 @@ class BinMerger:
                         if result[i] == result[j]:
                             adj_matrix[i][j] += 1
 
-            adj_matrix = adj_matrix > 2 # Cutoff for co-occurence value
-
+            adj_matrix = adj_matrix >= 1 # Cutoff for co-occurence value
             cluster_label = []
             i, c_label, cluster_start_idx = 0, 0, 0
             while(len(cluster_label) != len(adj_matrix)):
