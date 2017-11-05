@@ -26,7 +26,8 @@ class Experiment:
     def __init__(self, data_path, var_dict, n_bins_range=range(2, 21),
                  batch_size=512, n_epoch=20, embedding_dim=16, lr=0.001, 
                  weight_decay=0.0, verbose=False, cv=10,
-                 n_init_bins_list=[5, 10, 15, 20]):
+                 n_init_bins_list=[5, 10, 15, 20],
+                 co_occur_cutoff=1,):
         
         self.data = pd.read_csv(data_path)
         self.var_dict = var_dict
@@ -36,7 +37,8 @@ class Experiment:
 
         self.semantic_binning = SemanticBinning(self.var_dict, batch_size=batch_size, n_epoch=n_epoch,
                                                 embedding_dim=embedding_dim, lr=lr,
-                                                weight_decay=weight_decay, verbose=verbose)
+                                                weight_decay=weight_decay, verbose=verbose,
+                                                co_occur_cutoff=co_occur_cutoff)
         self.cv = cv
         self.y = LE().fit_transform(self.data[var_dict['class_var']])
         

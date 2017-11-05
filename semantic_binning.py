@@ -7,15 +7,16 @@ from merge_bins import BinMerger
 class SemanticBinning:
     
     def __init__(self, var_dict, embedding_dim, batch_size, n_epoch, lr, 
-                 weight_decay, verbose):
+                 weight_decay=0.0, verbose=False, co_occur_cutoff=1):
         self.var_dict = var_dict
         self.embedding_dim = embedding_dim
         self.batch_size = batch_size
         self.n_epoch = n_epoch
         self.lr = lr
         self.weight_decay = weight_decay
+        self.co_occur_cutoff = co_occur_cutoff
         self.verbose = verbose
-        self.bin_embedder = BinEmbedder()
+        self.bin_embedder = BinEmbedder(co_occur_cutoff)
         
     def fit(self, data, n_init_bins=20):
         data_handler = DataHandler(data, self.var_dict)
@@ -31,7 +32,8 @@ class SemanticBinning:
                                                lr=self.lr,
                                                verbose=self.verbose)
         
-        self._bin_merger = BinMerger(self.bin_embedder.embedding_by_column)
+        self._bin_merger = BinMerger(self.bin_embedder.embedding_by_column,
+                                     co_occur_cutoff=self.co_occur_cutoff)
         self.bins_by_var = self._bin_merger.get_merged_bins_by_var(self.var_dict)
 
     def transform(self, data):

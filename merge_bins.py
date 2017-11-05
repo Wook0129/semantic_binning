@@ -7,8 +7,9 @@ from sklearn.metrics import pairwise_distances
 
 class BinMerger:
     
-    def __init__(self, embedding_by_column):
+    def __init__(self, embedding_by_column, co_occur_cutoff):
         self.embedding_by_column = embedding_by_column
+        self.co_occur_cutoff = co_occur_cutoff
 
     def _get_cols_and_pairwise_dist_btw_embeddings(self, variable):
     
@@ -46,14 +47,15 @@ class BinMerger:
             return p_cluster_label
 
         def ensemble_clustering(n_cols, results):
-            adj_matrix = np.zeros((n_cols, n_cols))
+            adj_matrix = np.eye(n_cols) * self.co_occur_cutoff
             for i in range(n_cols):
                 for result in results:
                     for j in range(n_cols):
                         if result[i] == result[j]:
                             adj_matrix[i][j] += 1
 
-            adj_matrix = adj_matrix >= 1 # Cutoff for co-occurence value
+            adj_matrix = adj_matrix >= self.co_occur_cutoff # Cutoff for co-occurence value
+            
             cluster_label = []
             i, c_label, cluster_start_idx = 0, 0, 0
             while(len(cluster_label) != len(adj_matrix)):

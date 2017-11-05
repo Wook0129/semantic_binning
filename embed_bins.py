@@ -11,8 +11,9 @@ from merge_bins import BinMerger
 
 class BinEmbedder:
     
-    def __init__(self):
-        self._scores_reg = list()
+    def __init__(self, co_occur_cutoff=1):
+        self._bins_by_var_reg = list()
+        self.co_occur_cutoff = co_occur_cutoff
 
     def _generate_instances(self, dummy_coded_data, n_variables):
         inputs, targets = list(), list()
@@ -26,26 +27,43 @@ class BinEmbedder:
     def _get_current_cluster(self, dummy_coded_data, var_dict):
         embedding_weights = self.be.state_dict()['embedding.weight']
         embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights.cpu().numpy()))
-        bin_merger = BinMerger(embedding_by_column)
+        bin_merger = BinMerger(embedding_by_column, self.co_occur_cutoff)
         num_bins = []
+        bins_by_var = dict()
         for var in var_dict['numerical_vars']:
             merged_bins, split_points = bin_merger._merge_bins(var)
             num_bins.append(len(merged_bins))
-        return num_bins
+            bins_by_var[var] = merged_bins
+        return num_bins, bins_by_var
     
-    def _check_convergence(self, curr_score, window_size=20):
-        if len(self._scores_reg) < window_size:
-            self._scores_reg.append(curr_score)
+    def _check_convergence(self, bins_by_var, window_size=10):
+        
+        def is_equal_bin(bins_by_var1, bins_by_var2):
+            cnt = 0
+            for var, bins in bins_by_var1.items():
+                is_equal = True
+                for b1, b2 in zip(bins, bins_by_var2[var]):
+                    if b1 != b2:
+                        is_equal = False
+                if is_equal:
+                    cnt += 1
+            if cnt == len(bins_by_var1):
+                return True
+            else:
+                return False
+            
+        if len(self._bins_by_var_reg) < window_size:
+            self._bins_by_var_reg.append(bins_by_var)
             return False
         else:
             convergence_cnt = 0
-            for prev_score in self._scores_reg[-window_size:]:
-                if curr_score < prev_score:
+            for prev_bins_by_var in self._bins_by_var_reg[-window_size:]:
+                if is_equal_bin(prev_bins_by_var, bins_by_var):
                     convergence_cnt += 1
-            if convergence_cnt >= window_size * 0.7:
+            if convergence_cnt == window_size:
                 return True
             else:
-                self._scores_reg = self._scores_reg[1:] + [curr_score]
+                self._bins_by_var_reg = self._bins_by_var_reg[1:] + [bins_by_var]
                 return False
             
     def learn_bin_embeddings(self, dummy_coded_data, var_dict, embedding_dim,
@@ -97,22 +115,22 @@ class BinEmbedder:
 
             if ((it+1) % n_iter_per_epoch == 0):
 
-                num_bins = self._get_current_cluster(dummy_coded_data, var_dict)
+                num_bins, bins_by_var = self._get_current_cluster(dummy_coded_data, var_dict)
                 
                 if verbose:
                     print('>>> Epoch = {}'.format(int((it+1) / n_iter_per_epoch)))
                     print('Loss = {}'.format(loss.data[0]))
                     print(num_bins)
                     
-                #if self._check_convergence(curr_score):
-                #    if verbose:
-                #        print('Embedding Converged!')
-                #    break
+                if self._check_convergence(bins_by_var):
+                    if verbose:
+                        print('Embedding Converged!')
+                    break
                     
-        #if not self._check_convergence(curr_score):        
-        #    print('Embedding Failed to Converge..')
+        if not self._check_convergence(bins_by_var):        
+            print('Embedding Failed to Converge..')
 
-        num_bins = self._get_current_cluster(dummy_coded_data, var_dict)    
+        num_bins, _ = self._get_current_cluster(dummy_coded_data, var_dict)    
         print('Learned #Bin by Variables = {}'.format(num_bins))
         
         embedding_weights = self.be.state_dict()['embedding.weight'].cpu().numpy()
