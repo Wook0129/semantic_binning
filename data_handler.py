@@ -16,7 +16,9 @@ class DataHandler:
             self.n_variables = len(var_dict['numerical_vars'])
             
         self.numerical_vars = data[var_dict['numerical_vars']].astype(np.float32)
-        self.class_var = data[var_dict['class_var']]
+        
+        if 'class_var' in var_dict:
+            self.class_var = data[var_dict['class_var']]
         
     def get_dummy_coded_data(self, init_discretize_method='equal_freq', 
                              n_init_bins=20, bins_by_variable=None):

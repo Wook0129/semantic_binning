@@ -89,9 +89,7 @@ class BinEmbedder:
 
         loss_ftn = nn.CrossEntropyLoss()
         
-        opt = torch.optim.Adagrad(self.be.parameters(), lr=lr, lr_decay=0.001)
-        #opt = torch.optim.SGD(self.be.parameters(), lr=lr, momentum=0.9)
-        #opt = torch.optim.Adam(self.be.parameters(), lr=lr, weight_decay=weight_decay)
+        opt = torch.optim.Adagrad(self.be.parameters() , lr=lr, lr_decay=0.001)
         
         for it in range(n_iter_per_epoch * n_epoch):
             
@@ -114,33 +112,19 @@ class BinEmbedder:
             self.be.embedding.weight.data = self.be.embedding.weight.data.div(embedding_norm)
 
             if ((it+1) % n_iter_per_epoch == 0):
-
-                num_bins, bins_by_var = self._get_current_cluster(dummy_coded_data, var_dict)
                 
                 if verbose:
                     print('>>> Epoch = {}'.format(int((it+1) / n_iter_per_epoch)))
                     print('Loss = {}'.format(loss.data[0]))
-                    print(num_bins)
-                    
-                if self._check_convergence(bins_by_var):
-                    if verbose:
-                        print('Embedding Converged!')
-                    break
-                    
-        if not self._check_convergence(bins_by_var):        
-            print('Embedding Failed to Converge..')
-
-        num_bins, _ = self._get_current_cluster(dummy_coded_data, var_dict)    
-        print('Learned #Bin by Variables = {}'.format(num_bins))
         
         embedding_weights = self.be.state_dict()['embedding.weight'].cpu().numpy()
         self.embedding_by_column = dict(zip(list(dummy_coded_data.columns), embedding_weights))
     
-    def visualize_embeddings(self, figsize=(20,20)):
+    def visualize_embeddings(self, figsize=(20,20), perplexity=10):
         
         col_names = list(self.embedding_by_column.keys())
         embedding_weights = list(self.embedding_by_column.values())
-        tsne = TSNE().fit_transform(embedding_weights)
+        tsne = TSNE(perplexity=perplexity).fit_transform(embedding_weights)
         
         plt.figure(figsize=figsize)
         plt.scatter(x=tsne[:,0], y=tsne[:,1])

@@ -4,16 +4,10 @@ import time
 import seaborn as sns
 
 from matplotlib import pyplot as plt
-    
-from sklearn.cluster import KMeans
-from sklearn.cluster import AgglomerativeClustering as Agglo
-from sklearn.metrics import normalized_mutual_info_score as NMI
 
 from sklearn.cross_validation import cross_val_score
 from sklearn.linear_model import LogisticRegression as LR
-from sklearn.naive_bayes import BernoulliNB as NB
 from sklearn.tree import DecisionTreeClassifier as DT
-from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier as RF
 from sklearn.preprocessing import LabelEncoder as LE
 
@@ -42,9 +36,9 @@ class Experiment:
         self.cv = cv
         self.y = LE().fit_transform(self.data[var_dict['class_var']])
         
-        self.lr_params = [0.1, 0.3, 0.5, 1.0, 3.0]
-        self.dt_params = [d for d in range(2,7)]
-        self.rf_params = [5, 10, 20, 30]
+        self.lr_params = [0.5,1.0]
+        self.dt_params = [3,4,5]
+        self.rf_params = [10,20,30]
         
     def _get_classification_score(self, X):
         
@@ -61,18 +55,7 @@ class Experiment:
             scores['dt_acc_depth={}'.format(d)] = get_cv_score(DT(max_depth=d), X)
         for n in self.rf_params:
             scores['rf_acc_n_est={}'.format(n)] = get_cv_score(RF(n_estimators=n), X)
-        scores['nb_acc'] = get_cv_score(NB(binarize=None), X)
-        scores['svm_acc'] = get_cv_score(SVC(), X)
         
-        return scores            
-    
-    def _get_clustering_score(self, X):
-        
-        scores = dict()
-        
-        n_cluster = len(set(self.y))
-        scores['kmeans_nmi'] = np.array([NMI(self.y, KMeans(n_cluster).fit_predict(X)) 
-                                         for i in range(self.cv)]).mean()
         return scores
     
     def perform_exp(self):
@@ -81,29 +64,25 @@ class Experiment:
         
         data_handler = DataHandler(self.data, self.var_dict)
         
-        raw_X = data_handler.get_dummy_coded_data('scale_numeric')
+        raw_X = data_handler.get_dummy_coded_data('dummy_only')
         n_cat_dummy_var = raw_X.shape[1] - len(self.var_dict['numerical_vars'])
         
         raw_clf_scores = self._get_classification_score(raw_X)
-        raw_clstr_scores = self._get_clustering_score(raw_X)
-        list_of_scores.append(('raw', raw_clf_scores, raw_clstr_scores, raw_X.shape[1] - n_cat_dummy_var))
+        list_of_scores.append(('raw', raw_clf_scores, raw_X.shape[1] - n_cat_dummy_var))
 
         for n_init_bins in self.n_init_bins_list:
             sb_X = self.semantic_binning.fit_transform(self.data, n_init_bins)
             sb_clf_scores = self._get_classification_score(sb_X)
-            sb_clstr_scores = self._get_clustering_score(sb_X)
-            list_of_scores.append(('sb_{}'.format(n_init_bins), sb_clf_scores, sb_clstr_scores, sb_X.shape[1]-n_cat_dummy_var))
-            
+            list_of_scores.append(('sb_{}'.format(n_init_bins), sb_clf_scores, sb_X.shape[1]-n_cat_dummy_var))
+        
         for n_bins in self.n_bins_range:
             ew_X = data_handler.get_dummy_coded_data('equal_width', n_bins)
             ew_clf_scores = self._get_classification_score(ew_X)
-            ew_clstr_scores = self._get_clustering_score(ew_X)
-            list_of_scores.append(('ew_{}'.format(n_bins), ew_clf_scores, ew_clstr_scores, ew_X.shape[1]-n_cat_dummy_var))
+            list_of_scores.append(('ew_{}'.format(n_bins), ew_clf_scores, ew_X.shape[1]-n_cat_dummy_var))
             
             ef_X = data_handler.get_dummy_coded_data('equal_freq', n_bins)
             ef_clf_scores = self._get_classification_score(ef_X)
-            ef_clstr_scores = self._get_clustering_score(ef_X)
-            list_of_scores.append(('ef_{}'.format(n_bins), ef_clf_scores, ef_clstr_scores, ef_X.shape[1]-n_cat_dummy_var))
+            list_of_scores.append(('ef_{}'.format(n_bins), ef_clf_scores, ef_X.shape[1]-n_cat_dummy_var))
         
         self.list_of_scores = list_of_scores
         print('Experiment Finished !. Result Saved in Exp Instance..')
@@ -118,13 +97,9 @@ class Experiment:
             exp_result['lr_acc_C={}'.format(C)] = []
         for depth in self.dt_params:
             exp_result['dt_acc_depth={}'.format(depth)] = []
-        for n_estimator in self.rf_params:
-            exp_result['rf_acc_n_est={}'.format(n_estimator)] = []        
-            
-        exp_result['nb_acc'] = []
-        exp_result['svm_acc'] = []
-        exp_result['kmeans_nmi'] = []
-        
+        for n_est in self.rf_params:
+            exp_result['rf_acc_n_est={}'.format(n_est)] = []
+
         exp_result['n_disc_cols'] = []
         
         for x in self.list_of_scores:
@@ -138,18 +113,22 @@ class Experiment:
             for d in self.dt_params:
                 clf = 'dt_acc_depth={}'.format(d)
                 exp_result[clf].append(x[1][clf][0])
-                
+
             for n in self.rf_params:
                 clf = 'rf_acc_n_est={}'.format(n)
                 exp_result[clf].append(x[1][clf][0])
                 
-            exp_result['nb_acc'].append(x[1]['nb_acc'][0])
-            exp_result['svm_acc'].append(x[1]['svm_acc'][0])
-            exp_result['kmeans_nmi'].append(x[2]['kmeans_nmi'])
-            
-            exp_result['n_disc_cols'].append(x[3])
+            exp_result['n_disc_cols'].append(x[2])
             
         return pd.DataFrame(exp_result)
+
+    def report_best_result_by_method(self):
+        best_result = self.get_result()
+        for model in ['dt','lr','rf']:
+            acc_by_parameter = [col for col in best_result.columns if model+'_acc' in col]
+            best_result[model] = best_result[acc_by_parameter].max(axis=1)
+            best_result = best_result.drop(acc_by_parameter, axis=1)
+        return best_result
 
     def plot_model_comparison_chart(self, result):
 
@@ -161,6 +140,7 @@ class Experiment:
             ew_ncols, ew_acc = [], []
             ef_ncols, ef_acc = [], []
             sb_ncols, sb_acc = [], []
+            
             for c, a, d in zip(rel_n_cols, acc, disc_method):
                 if 'raw' in d:
                     raw_ncols.append(c)
@@ -174,7 +154,7 @@ class Experiment:
                 if 'sb' in d:
                     sb_ncols.append(c)
                     sb_acc.append(a)
-                
+                    
             ew = ax[loc_x][loc_y].scatter(x=ew_ncols, y=ew_acc, s=200, c='g', marker='x')
             ef = ax[loc_x][loc_y].scatter(x=ef_ncols, y=ef_acc, s=200, c='b', marker='x')
             sb = ax[loc_x][loc_y].scatter(x=sb_ncols, y=sb_acc, s=200, c='r', marker='x')
@@ -182,11 +162,11 @@ class Experiment:
             if title != 'Naive Bayes':
                 raw = ax[loc_x][loc_y].scatter(x=raw_ncols, y=raw_acc, s=200, c='y', marker='x')
                 points = (raw, ew, ef, sb)
-                legend_names = ('Raw', 'Equal Width', 'Equal Freq', 'Semantic Binning')
+                legend_names = ('Raw', 'Equal Width', 'Equal Freq', 'Proposed')
             
             else:
                 points = (ew, ef, sb)
-                legend_names = ('Equal Width', 'Equal Freq', 'Semantic Binning')                
+                legend_names = ('Equal Width', 'Equal Freq', 'Proposed')                
             ax[loc_x][loc_y].legend(points, legend_names, 
                                     scatterpoints=1, loc='lower right', ncol=2, fontsize=12)        
             for i, xy in enumerate(zip(rel_n_cols, acc)):
@@ -201,15 +181,12 @@ class Experiment:
         max_n_cols = n_cols.max()
         rel_n_cols = [(x / max_n_cols) for x in n_cols]
 
-        fig, ax = plt.subplots(figsize=(30, 20), ncols=3, nrows=2)
-        plt.suptitle('Classification, Clustering Performances', fontsize=30)
+        fig, ax = plt.subplots(figsize=(20, 30), ncols=1, nrows=3)
+        plt.suptitle('Classification Performances', fontsize=30)
 
         plot_chart_for_model(0, 0, 'Decision Tree(depth=3)', result['dt_acc_depth=3'], 'Accuracy')
         plot_chart_for_model(0, 1, 'Logistic Regression(C=1.0)', result['lr_acc_C=1.0'], 'Accuracy')
         plot_chart_for_model(0, 2, 'Naive Bayes', result['nb_acc'], 'Accuracy')
-        plot_chart_for_model(1, 0, 'Random Forest(#tree=20)', result['rf_acc_n_est=20'], 'Accuracy')
-        plot_chart_for_model(1, 1, 'Support Vector Machine(RBF kernel)', result['svm_acc'], 'Accuracy')
-        plot_chart_for_model(1, 2, 'K-means NMI', result['kmeans_nmi'], 'NMI')
 
     def plot_pairwise_distance_matrices(self):
 
@@ -243,3 +220,4 @@ class Experiment:
 
             sns.heatmap(dist_matrix, cmap='gray', xticklabels=cluster_label,
                         yticklabels=cols, ax=ax[row][col])
+        

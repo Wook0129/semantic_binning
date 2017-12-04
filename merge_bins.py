@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering as Agglo
+from sklearn.cluster import KMeans
 from sklearn.decomposition import KernelPCA
 from sklearn.metrics import silhouette_score
 from sklearn.metrics import pairwise_distances
@@ -74,8 +75,10 @@ class BinMerger:
         else:
             results = []
             for n_cluster in range(2, len(dist_matrix)):
-                agg = Agglo(n_cluster, affinity='precomputed', linkage='complete')
-                cluster_label = agg.fit_predict(dist_matrix)
+                #agg = Agglo(n_cluster, affinity='precomputed', linkage='complete')
+                kmeans = KMeans(n_cluster)
+                #cluster_label = agg.fit_predict(dist_matrix)
+                cluster_label = kmeans.fit_predict(dist_matrix)
                 cluster_label = post_process_cluster_label(cluster_label)
                 results.append(cluster_label)
 
